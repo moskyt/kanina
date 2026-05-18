@@ -58,6 +58,22 @@ void neo_idle() {
   neo(128, 128, 128);
 }
 
+void neo_done() {
+  neo(255, 0, 0);
+}
+
+void neo_update() {
+  neo(255, 255, 0);
+}
+
+void neo_brew() {
+  neo(255,0,255);
+}
+void neo_error() {
+  neo(255,0,0);
+}
+
+
 void neo(uint8_t r, uint8_t g, uint8_t b) {
   neopixel.setPixelColor(0,r,g,b);
   neopixel.show();

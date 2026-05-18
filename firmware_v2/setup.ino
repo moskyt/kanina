@@ -7,7 +7,10 @@ void setup() {
   Wire1.begin();
   Serial.begin(115200);
   delay(1000);
-  Serial.println("HELO\n");
+  Serial.println("HELO");
+  Serial.println("Kanina");
+  Serial.println(FIRMWARE_VERSION);
+  Serial.println("");
 
   setup_pins();
   setup_scale();

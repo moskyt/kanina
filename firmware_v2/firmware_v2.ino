@@ -83,7 +83,8 @@ enum global_state_ { s_init,                  // startup
                      s_idle,                  // idle
                      s_pid,                   // simple PID heatup
                      s_flow,                  // flow rate measurement
-                     s_cool                   // cooldown by pump
+                     s_cool,                  // cooldown by pump
+                     s_update                 // self-update from GitHub Releases
                      } global_state;
 
 unsigned short signal_spray = 0;
@@ -270,7 +271,7 @@ void handle_main(Button2& btn) {
     brew_preheat_time = config__brew_preheat_time;
     global_state = s_brew;
     brew_step = b_idle;
-    neo(255,0,255);
+    neo_brew();
   } else
   if (global_state == s_brew) {
     if (brew_step == b_error) {
@@ -284,6 +285,7 @@ void handle_main(Button2& btn) {
       signal_heater = 0;
       signal_spray = 0;
       brew_step = b_error;
+      neo_error();
     }
   }
 }

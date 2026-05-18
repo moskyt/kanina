@@ -78,16 +78,17 @@ void update_displays() {
 
   //--- neo
   if (global_state == s_idle) {
-    neo(120, 120, 120);
+    neo_idle();
   } 
   if (global_state == s_brew) {
     if (brew_step == b_error) {
-      neo(255, 0, 0);
+      neo_error();
     } else
     if (brew_step == b_done) {
-      neo(0, 255, 0);
-    } else
-      neo(255, 0, 255);    
+      neo_done();
+    } else {
+      neo_brew();
+    }
   }
 
   //--- print LED

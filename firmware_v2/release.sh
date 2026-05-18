@@ -23,6 +23,10 @@ SKETCH_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKETCH_NAME="$(basename "$SKETCH_DIR")"
 BUILD_DIR="${SKETCH_DIR}/build"
 BIN_PATH="${BUILD_DIR}/${SKETCH_NAME}.ino.bin"
+# GitHub stores assets under their basename; the `#name` syntax to `gh release`
+# is only a display label, not the stored filename. So we upload under the
+# exact name the device expects (config__github_asset = "firmware.bin").
+ASSET_PATH="${BUILD_DIR}/firmware.bin"
 CONFIG_H="${SKETCH_DIR}/config.h"
 
 cd "$SKETCH_DIR"
@@ -73,7 +77,8 @@ if [ ! -f "$BIN_PATH" ]; then
   echo "build did not produce $BIN_PATH" >&2
   exit 1
 fi
-echo "built: $BIN_PATH ($(wc -c < "$BIN_PATH") bytes)"
+cp "$BIN_PATH" "$ASSET_PATH"
+echo "built: $ASSET_PATH ($(wc -c < "$ASSET_PATH") bytes)"
 
 # --- commit + tag + push -----------------------------------------------------
 
@@ -89,7 +94,7 @@ git push origin "$VERSION"
 # --- release -----------------------------------------------------------------
 
 gh release create "$VERSION" \
-  "${BIN_PATH}#firmware.bin" \
+  "$ASSET_PATH" \
   --title "$VERSION" \
   --notes "Firmware build $VERSION"
 

@@ -202,9 +202,8 @@ static bool download_and_apply(const String& tag) {
 
   // From here on, the heater/pump must be off; the apply() will reset the board.
   mx__shutdown();
-  global_state = s_idle;
-  brew_step = b_idle;
-  neo(0, 0, 255);
+  global_state = s_update;
+  neo_update();
 
   if (InternalStorage.open(head.content_length) != 1) {
     Log.println("UPDATE: InternalStorage.open failed");
@@ -254,21 +253,34 @@ static bool download_and_apply(const String& tag) {
 void check_for_update(bool verbose) {
   if (!wifi_ready) {
     if (verbose) { Log.println("UPDATE: WiFi not ready, skip"); }
+    global_state = s_idle;
+    neo_idle();
     return;
   }
+
+  // TLS handshakes and the first SPI-mediated read from the ESP32-S3 coproc
+  // can block inside WiFiSSLClient longer than the 5 s app-level WDT. Widen
+  // the WDT for the update window; if apply() succeeds the board resets and
+  // setup() restores the 5 s value, if it fails we restore it explicitly.
+  WDT.begin(30000);
+  global_state = s_update;
+  neo_update();
 
   String tag;
   if (!latest_tag(tag)) {
     Log.println("UPDATE: could not resolve latest tag");
-    return;
-  }
-  if (tag == FIRMWARE_VERSION) {
+  } else if (tag == FIRMWARE_VERSION) {
     if (verbose) {
       Log.print("UPDATE: already on latest ("); Log.print(tag); Log.println(")");
     }
-    return;
+  } else {
+    Log.print("UPDATE: new version available "); Log.print(tag);
+    Log.print(" (have "); Log.print(FIRMWARE_VERSION); Log.println(")");
+    download_and_apply(tag); // on success this never returns (apply() resets)
   }
-  Log.print("UPDATE: new version available "); Log.print(tag);
-  Log.print(" (have "); Log.print(FIRMWARE_VERSION); Log.println(")");
-  download_and_apply(tag);
+
+  // Any return path lands here: restore normal operation.
+  WDT.begin(5000);
+  global_state = s_idle;
+  neo_idle();
 }
