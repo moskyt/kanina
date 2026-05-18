@@ -102,7 +102,7 @@ void setup_oled() {
 
   oled_display.setTextSize(1);
   oled_display.setTextColor(SSD1306_WHITE);
-  oled_display.setCursor(10,20);
+  oled_display.setCursor(0,0);
   oled_display.println("Kanina");
   oled_display.println("");
   oled_display.print("firmware ");
