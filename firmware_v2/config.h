@@ -1,0 +1,34 @@
+#pragma once
+
+constexpr int   brew_steady_target = 500;
+constexpr float brew_steady_delta = 1.1;
+constexpr float K1p =  2.5;
+constexpr float K1i = 0.01;
+constexpr float K1d = 30.0;
+constexpr float K2p =  3.0;
+constexpr float K2i = 0.01;
+constexpr float K2d =  5.0;
+constexpr float decay1_20  = 2.0;
+constexpr float decay1_100 = 6.5;
+constexpr float capacity1 = 0.08;
+constexpr float transfer = 20.0;
+constexpr float decay2 = 115.0;
+constexpr float capacity2 = 0.006;
+
+constexpr int   config__bootstrap_temperature = 90;
+constexpr int   config__brew_temperature = 95;
+constexpr int   config__brew_base_power = 120;
+constexpr int   config__brew_preheat_time = 150;
+constexpr int   config__brew_pump = 100;
+
+constexpr int brew_bloom_time = 30000;
+constexpr int brew_bloom_weight = 50;
+
+constexpr float pid_creep_delta = 0.5;
+constexpr float pid_target_dt = 0.1;
+
+constexpr const char* config__wifi_ssid     = "haf2201";
+constexpr const char* config__wifi_password = "1a2b3c4d5e";
+constexpr const char* config__ota_hostname  = "kavovar";
+constexpr const char* config__ota_password  = "kavovar";
+constexpr unsigned long config__wifi_connect_timeout_ms = 15000;
