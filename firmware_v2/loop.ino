@@ -390,7 +390,7 @@ void loop_brew(unsigned long now) {
       program_start = now;
       mx__shutdown();  
       strncpy(brew_ux, "(done)", sizeof(brew_ux));
-      neo(0,255,0);
+      neo_done();
     }
     if (update_counter == 0) print_brew_flow_serial();
   }
@@ -398,17 +398,17 @@ void loop_brew(unsigned long now) {
     if (now >= program_start + 15000) {
       global_state = s_idle;
       brew_step = b_idle;
-      neo(120, 120, 120);
+      neo_idle();
     }
   } 
   else {
     // brew cancelled
     if (now >= program_start + 15000) {
       global_state = s_idle;
-      neo(120, 120, 120);
+      neo_idle();
     } else {
       strncpy(brew_ux, "(cancelled)", sizeof(brew_ux));
-      neo(255, 0, 0);
+      neo_error();
     }
   }
 }

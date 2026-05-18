@@ -249,20 +249,16 @@ static bool download_and_apply(const String& tag) {
   return true;
 }
 
-// Entry point. `verbose=true` logs the no-update path; called from setup_net().
+// Entry point. `verbose=true` logs the no-update path; called from setup_net()
+// before the WDT is enabled (TLS handshakes block longer than the IWDT max).
+// Also exposed to the CLI; note that the CLI path runs with WDT already
+// running at 5 s — long blocks inside WiFiSSLClient will reset the board.
 void check_for_update(bool verbose) {
   if (!wifi_ready) {
     if (verbose) { Log.println("UPDATE: WiFi not ready, skip"); }
-    global_state = s_idle;
-    neo_idle();
     return;
   }
 
-  // TLS handshakes and the first SPI-mediated read from the ESP32-S3 coproc
-  // can block inside WiFiSSLClient longer than the 5 s app-level WDT. Widen
-  // the WDT for the update window; if apply() succeeds the board resets and
-  // setup() restores the 5 s value, if it fails we restore it explicitly.
-  WDT.begin(30000);
   global_state = s_update;
   neo_update();
 
@@ -279,8 +275,6 @@ void check_for_update(bool verbose) {
     download_and_apply(tag); // on success this never returns (apply() resets)
   }
 
-  // Any return path lands here: restore normal operation.
-  WDT.begin(5000);
   global_state = s_idle;
   neo_idle();
 }

@@ -19,9 +19,13 @@ void setup() {
   setup_led();
   setup_oled();
 
-  WDT.begin(5000); // 5-second timeout
-
+  // setup_net() runs the boot-time update check, which performs TLS handshakes
+  // that block inside WiFiSSLClient longer than the IWDT max (~5.5 s on RA4M1,
+  // and the IWDT can't be reinitialised once started). So we start the WDT
+  // only AFTER the update check has had its chance.
   setup_net();
+
+  WDT.begin(5000); // 5-second timeout for normal operation
 
   Serial.println("INIT done.");
 
@@ -29,7 +33,7 @@ void setup() {
   signal_pump = 0;
   signal_heater = 0;
   signal_spray = 0;
-  neo(120,120,120);
+  neo_idle();
   show_led_number(brew_target_weight);
 }
 
