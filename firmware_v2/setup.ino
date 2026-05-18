@@ -18,7 +18,7 @@ void setup() {
 
   WDT.begin(5000); // 5-second timeout
 
-  setup_ota();
+  setup_net();
 
   Serial.println("INIT done.");
 
@@ -100,10 +100,13 @@ void setup_oled() {
 
   oled_display.clearDisplay();
 
-  oled_display.setTextSize(2);
+  oled_display.setTextSize(1);
   oled_display.setTextColor(SSD1306_WHITE);
   oled_display.setCursor(10,20);
-  oled_display.println("Kavovar.");
+  oled_display.println("Kanina");
+  oled_display.println("");
+  oled_display.print("firmware ");
+  oled_display.println(FIRMWARE_VERSION);
 
   oled_display.display();
 

@@ -493,8 +493,8 @@ void loop_pid(unsigned long now) {
 void loop() {
   unsigned long now = millis();
 
-  //--- OTA
-  loop_ota();
+  //--- WiFi / telnet
+  loop_net();
 
   if (update_counter <= 0) update_displays();
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 constexpr int   brew_steady_target = 500;
 constexpr float brew_steady_delta = 1.1;
 constexpr float K1p =  2.5;
@@ -29,6 +31,15 @@ constexpr float pid_target_dt = 0.1;
 
 constexpr const char* config__wifi_ssid     = "haf2201";
 constexpr const char* config__wifi_password = "1a2b3c4d5e";
-constexpr const char* config__ota_hostname  = "kavovar";
-constexpr const char* config__ota_password  = "kavovar";
 constexpr unsigned long config__wifi_connect_timeout_ms = 15000;
+
+// Bump this string before every release; the GitHub release tag must match
+// exactly (e.g. tag "v0.1.0" -> FIRMWARE_VERSION "v0.1.0").
+constexpr const char* FIRMWARE_VERSION = "v0.1.0";
+
+constexpr const char* config__github_owner = "moskyt";
+constexpr const char* config__github_repo  = "kanina";
+// Asset file name to download from the latest release.
+constexpr const char* config__github_asset = "firmware.bin";
+
+constexpr uint16_t config__telnet_port = 23;

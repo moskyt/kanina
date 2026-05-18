@@ -32,8 +32,14 @@ void process_cli(char* input) {
     Log.println(WiFi.RSSI());
     Log.print("SSID = ");
     Log.println(WiFi.SSID());
-    Log.print("ota_ready = ");
-    Log.println(ota_ready);
+    Log.print("wifi_ready = ");
+    Log.println(wifi_ready);
+    Log.print("firmware = ");
+    Log.println(FIRMWARE_VERSION);
+  } else
+  if (strcmp(input, "UPDATE") == 0) {
+    Log.println("UPDATE requested.");
+    check_for_update(true);
   } else
   if (strcmp(input, "TARE") == 0) {
     Log.println("Resetting W to zero.");    

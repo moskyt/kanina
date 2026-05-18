@@ -7,40 +7,34 @@
 #include <WDT.h>
 #include <HX711_ADC.h>
 #include <WiFiS3.h>
-#include <WiFiUdp.h>
 
 #include "config.h"
+#include "update.h"
 
-extern bool ota_ready;
-extern WiFiUDP log_udp;
-
-constexpr uint16_t LOG_UDP_PORT = 4444;
+extern bool wifi_ready;
+void telnet_write(const uint8_t* p, size_t n);
 
 class LogStream : public Print {
   static constexpr size_t BUF = 128;
   uint8_t buf[BUF];
   size_t idx = 0;
-  void flush_udp() {
+  void flush_net() {
     if (idx == 0) { return; }
-    if (ota_ready) {
-      log_udp.beginPacket(IPAddress(255, 255, 255, 255), LOG_UDP_PORT);
-      log_udp.write(buf, idx);
-      log_udp.endPacket();
-    }
+    if (wifi_ready) { telnet_write(buf, idx); }
     idx = 0;
   }
 public:
   size_t write(uint8_t c) override {
     Serial.write(c);
     if (idx < BUF) buf[idx++] = c;
-    if (c == '\n' || idx == BUF) flush_udp();
+    if (c == '\n' || idx == BUF) flush_net();
     return 1;
   }
   size_t write(const uint8_t* p, size_t n) override {
     Serial.write(p, n);
     for (size_t i = 0; i < n; i++) {
       if (idx < BUF) buf[idx++] = p[i];
-      if (p[i] == '\n' || idx == BUF) flush_udp();
+      if (p[i] == '\n' || idx == BUF) flush_net();
     }
     return n;
   }
