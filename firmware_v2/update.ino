@@ -17,7 +17,64 @@
 //        -> 200 + binary body                                (flash it)
 
 static constexpr int   UPDATE_MAX_REDIRECTS = 4;
+static constexpr int   UPDATE_CONNECT_RETRIES = 3;
 static constexpr unsigned long UPDATE_HTTP_TIMEOUT_MS = 20000;
+static constexpr unsigned long UPDATE_OLED_PROGRESS_MS = 500;
+
+// Retrying SSL connect — the Azure-backed asset host (release-assets.*) is
+// flaky on first contact, and the WiFiS3 stack sometimes needs a second try.
+static bool ssl_connect(WiFiSSLClient& client, const char* host, uint16_t port) {
+  for (int attempt = 1; attempt <= UPDATE_CONNECT_RETRIES; attempt++) {
+    client.stop();
+    WDT.refresh();
+    if (client.connect(host, port)) { return true; }
+    Log.print("UPDATE: connect attempt "); Log.print(attempt);
+    Log.print(" failed for "); Log.println(host);
+    if (attempt < UPDATE_CONNECT_RETRIES) {
+      WDT.refresh();
+      delay(1000);
+    }
+  }
+  return false;
+}
+
+// --- OLED status helpers (the main loop isn't drawing during update) -------
+
+static void oled_status(const char* line1, const char* line2 = nullptr) {
+  oled_display.clearDisplay();
+  oled_display.setTextColor(SSD1306_WHITE);
+  oled_display.setTextSize(2);
+  oled_display.setCursor(0, 0);
+  oled_display.println(line1);
+  if (line2) {
+    oled_display.setTextSize(1);
+    oled_display.setCursor(0, 24);
+    oled_display.println(line2);
+  }
+  oled_display.display();
+}
+
+static void oled_progress(long got, long total) {
+  oled_display.clearDisplay();
+  oled_display.setTextColor(SSD1306_WHITE);
+
+  oled_display.setTextSize(2);
+  oled_display.setCursor(0, 0);
+  oled_display.println("Update");
+
+  int pct = (total > 0) ? (int)(100L * got / total) : 0;
+  if (pct > 100) { pct = 100; }
+  char buf[24];
+  snprintf(buf, sizeof(buf), "%d%% %ld/%ld", pct, got, total);
+  oled_display.setTextSize(1);
+  oled_display.setCursor(0, 24);
+  oled_display.println(buf);
+
+  int bar_w = (SCREEN_WIDTH - 4) * pct / 100;
+  oled_display.drawRect(0, 40, SCREEN_WIDTH, 12, SSD1306_WHITE);
+  if (bar_w > 0) { oled_display.fillRect(2, 42, bar_w, 8, SSD1306_WHITE); }
+  oled_display.display();
+}
 
 static bool parse_https_url(const String& url, UrlParts& out) {
   const char* prefix = "https://";
@@ -102,8 +159,7 @@ static bool open_followed(WiFiSSLClient& client, const String& start_url, HttpHe
       return false;
     }
     Log.print("UPDATE: GET "); Log.print(u.host); Log.println(u.path);
-    client.stop();
-    if (!client.connect(u.host.c_str(), 443)) {
+    if (!ssl_connect(client, u.host.c_str(), 443)) {
       Log.print("UPDATE: connect failed: "); Log.println(u.host);
       return false;
     }
@@ -131,8 +187,7 @@ static bool probe_redirect(WiFiSSLClient& client, const String& url, String& out
   UrlParts u;
   if (!parse_https_url(url, u)) { return false; }
   Log.print("UPDATE: PROBE "); Log.print(u.host); Log.println(u.path);
-  client.stop();
-  if (!client.connect(u.host.c_str(), 443)) {
+  if (!ssl_connect(client, u.host.c_str(), 443)) {
     Log.print("UPDATE: connect failed: "); Log.println(u.host);
     return false;
   }
@@ -204,9 +259,11 @@ static bool download_and_apply(const String& tag) {
   mx__shutdown();
   global_state = s_update;
   neo_update();
+  oled_progress(0, head.content_length);
 
   if (InternalStorage.open(head.content_length) != 1) {
     Log.println("UPDATE: InternalStorage.open failed");
+    oled_status("Update", "open failed");
     ssl.stop();
     return false;
   }
@@ -214,6 +271,7 @@ static bool download_and_apply(const String& tag) {
   uint8_t buf[256];
   long remaining = head.content_length;
   unsigned long deadline = millis() + UPDATE_HTTP_TIMEOUT_MS;
+  unsigned long last_progress = 0;
   while (remaining > 0) {
     WDT.refresh();
     int avail = ssl.available();
@@ -225,10 +283,15 @@ static bool download_and_apply(const String& tag) {
       for (int i = 0; i < n; i++) { InternalStorage.write(buf[i]); }
       remaining -= n;
       deadline = millis() + UPDATE_HTTP_TIMEOUT_MS;
+      if (millis() - last_progress > UPDATE_OLED_PROGRESS_MS) {
+        oled_progress(head.content_length - remaining, head.content_length);
+        last_progress = millis();
+      }
     } else if (!ssl.connected()) {
       break;
     } else if (millis() > deadline) {
       Log.println("UPDATE: download timeout");
+      oled_status("Update", "timeout");
       InternalStorage.close();
       ssl.stop();
       return false;
@@ -240,9 +303,12 @@ static bool download_and_apply(const String& tag) {
 
   if (remaining != 0) {
     Log.print("UPDATE: short read, "); Log.print(remaining); Log.println(" bytes missing");
+    oled_status("Update", "short read");
     return false;
   }
 
+  oled_progress(head.content_length, head.content_length);
+  oled_status("Applying", "resetting...");
   Log.println("UPDATE: applying — board will reset");
   delay(100);
   InternalStorage.apply(); // reboots into the new firmware; does not return
@@ -261,18 +327,28 @@ void check_for_update(bool verbose) {
 
   global_state = s_update;
   neo_update();
+  oled_status("Update", "checking...");
 
   String tag;
   if (!latest_tag(tag)) {
     Log.println("UPDATE: could not resolve latest tag");
+    oled_status("Update", "no tag");
+    delay(1500);
   } else if (tag == FIRMWARE_VERSION) {
     if (verbose) {
       Log.print("UPDATE: already on latest ("); Log.print(tag); Log.println(")");
     }
+    oled_status("Up to date", FIRMWARE_VERSION);
+    delay(1500);
   } else {
     Log.print("UPDATE: new version available "); Log.print(tag);
     Log.print(" (have "); Log.print(FIRMWARE_VERSION); Log.println(")");
+    char msg[24];
+    snprintf(msg, sizeof(msg), "found %s", tag.c_str());
+    oled_status("Update", msg);
     download_and_apply(tag); // on success this never returns (apply() resets)
+    // if we get here the download failed; keep the failure message visible
+    delay(2000);
   }
 
   global_state = s_idle;

@@ -37,10 +37,6 @@ void process_cli(char* input) {
     Log.print("firmware = ");
     Log.println(FIRMWARE_VERSION);
   } else
-  if (strcmp(input, "UPDATE") == 0) {
-    Log.println("UPDATE requested.");
-    check_for_update(true);
-  } else
   if (strcmp(input, "TARE") == 0) {
     Log.println("Resetting W to zero.");    
     scale.tare();
