@@ -114,11 +114,10 @@ void neo_idle() {
 }
 
 void neo_done() {
-  neo_solid(255, 0, 0);
+  neo_pulse(0, 128, 0,  0, 255, 0, 3.0);
 }
 
 void neo_update() {
-  // neo_solid(255, 255, 0);
   neo_pulse(255, 255, 0, 0, 255, 0, 1.0); 
 }
 

@@ -396,12 +396,14 @@ void loop_brew(unsigned long now) {
     if (update_counter == 0) print_brew_flow_serial();
   }
   else if (brew_step == b_done) {
-    if (now >= program_start + 15000) {
+    // The pot is full of coffee (200+ g) when brewing finishes, so the moment
+    // the weight drops below zero the tared pot has clearly been lifted off.
+    if (measurement_weight < 0) {
       global_state = s_idle;
       brew_step = b_idle;
       neo_idle();
     }
-  } 
+  }
   else {
     // brew cancelled
     if (now >= program_start + 15000) {
