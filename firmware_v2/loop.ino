@@ -305,6 +305,7 @@ void loop_brew(unsigned long now) {
       Serial.print(brew_preheat_time);
       Serial.println(" ms");
 
+      buzzer_start_preheat();
       start_preheat(now);
       brew_step = b_preheat1;
     }
@@ -497,7 +498,10 @@ void loop() {
   //--- WiFi / telnet
   loop_net();
 
-  if (update_counter <= 0) update_displays();
+  if (update_counter <= 0 || update_flag) {
+    update_displays();
+    update_flag = false;
+  }
 
   //--- buttons hardware
   button.loop();

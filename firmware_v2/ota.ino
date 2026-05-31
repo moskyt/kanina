@@ -90,7 +90,14 @@ static void wifi_connect() {
 void setup_net() {
   wifi_connect();
   if (wifi_ready) {
+    oled_display.println("WIFI OK");
+    oled_display.display();
+    delay(2000);
     check_for_update(/*verbose=*/true);
+  } else {
+    oled_display.println("Failed to connect to WIFI");
+    oled_display.display();
+    delay(2000);
   }
 }
 

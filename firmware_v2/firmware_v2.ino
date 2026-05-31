@@ -160,6 +160,7 @@ Adafruit_SSD1306 oled_display(
 
 int update_counter = 0;
 int update_ref = 100;
+bool update_flag = false;
 
 //--- helper programs
 
@@ -252,18 +253,9 @@ void handle_set_down(Button2& btn) {
 }
 
 void handle_main_long(Button2& btn) {
-  Serial.println("main long");
+  Serial.println("Pressed button for long.");
   if (global_state == s_idle) {
     // start bootstrap!
-
-    buzzer.tone(440, 100);
-    delay(200);
-    buzzer.tone(0, 0);
-    delay(200);
-    buzzer.tone(440, 100);
-    delay(200);
-    buzzer.tone(0, 0);
-
     pid_target = config__bootstrap_temperature;
     Serial.print("Bootstrap requested: ");
     Serial.println(config__bootstrap_temperature);
@@ -280,6 +272,7 @@ void handle_main_long(Button2& btn) {
     heaterPID.SetMode(heaterPID.Control::automatic);
     heaterPID.SetOutputLimits(0, 255);
     heaterPID.Reset();    
+    buzzer_start_bootstrap();
     neo_bootstrap();
   } else 
   if (global_state == s_bootstrap) {
@@ -287,10 +280,11 @@ void handle_main_long(Button2& btn) {
     neo_idle();
     mx__shutdown();
   } 
+  update_flag = true;
 }
 
 void handle_main(Button2& btn) {
-  Serial.println("main");
+  Serial.println("Pressed button.");
 
   if ((global_state == s_idle) || (global_state == s_bootstrap)) {
     // start brew!
@@ -299,6 +293,7 @@ void handle_main(Button2& btn) {
     brew_preheat_time = config__brew_preheat_time;
     global_state = s_brew;
     brew_step = b_idle;
+    buzzer_start_brew();
     neo_brew();
   } else
   if (global_state == s_brew) {
@@ -316,4 +311,5 @@ void handle_main(Button2& btn) {
       neo_error();
     }
   }
+  update_flag = true;
 }

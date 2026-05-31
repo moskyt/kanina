@@ -63,7 +63,7 @@ void setup_buttons() {
 
   button.setClickHandler(handle_main);
   button.setLongClickTime(2000);
-  button.setLongClickHandler(handle_main_long);
+  button.setLongClickDetectedHandler(handle_main_long);
   set_up.setPressedHandler(handle_set_up);
   set_down.setPressedHandler(handle_set_down);
 }
