@@ -7,6 +7,7 @@
 #include <WDT.h>
 #include <HX711_ADC.h>
 #include <WiFiS3.h>
+#include <Modulino.h>
 
 #include "config.h"
 #include "update.h"
@@ -120,6 +121,8 @@ bool pump_primed = false;
 //--- hardware
 
 Adafruit_NeoPixel neopixel = Adafruit_NeoPixel(1, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
+
+ModulinoBuzzer buzzer;
 
 Button2 button, set_up, set_down;
 
@@ -236,6 +239,14 @@ void handle_main_long(Button2& btn) {
   if (global_state == s_idle) {
     // start bootstrap!
 
+    buzzer.tone(440, 100);
+    delay(200);
+    buzzer.tone(0, 0);
+    delay(200);
+    buzzer.tone(440, 100);
+    delay(200);
+    buzzer.tone(0, 0);
+
     pid_target = config__bootstrap_temperature;
     Serial.print("Bootstrap requested: ");
     Serial.println(config__bootstrap_temperature);
@@ -264,7 +275,7 @@ void handle_main_long(Button2& btn) {
 void handle_main(Button2& btn) {
   Serial.println("main");
 
-  if (global_state == s_idle) {
+  if ((global_state == s_idle) || (global_state == s_bootstrap)) {
     // start brew!
     brew_temperature = config__brew_temperature;
     brew_base_power = config__brew_base_power;

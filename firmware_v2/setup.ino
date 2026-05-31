@@ -12,6 +12,9 @@ void setup() {
   Serial.println(FIRMWARE_VERSION);
   Serial.println("");
 
+  Modulino.begin();
+  buzzer.begin();
+
   setup_pins();
   setup_scale();
   setup_neopixel();
@@ -130,5 +133,5 @@ void setup_led() {
   }
   Serial.println("INIT led OK.");
 
-  led_display.print("Milk");
+  led_display.print("CAFE");
 }
