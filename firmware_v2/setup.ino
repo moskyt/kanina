@@ -37,6 +37,7 @@ void setup() {
   signal_heater = 0;
   signal_spray = 0;
   neo_idle();
+  buzzer_init();
   show_led_number(brew_target_weight);
 }
 
