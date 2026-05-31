@@ -56,6 +56,29 @@ void telnet_poll_cli() {
   }
 }
 
+// Animated "connecting" feedback shown on both displays while wifi_try()
+// blocks. Called once per ~250 ms wait tick with an increasing frame counter.
+static void wifi_show_connecting(const char* ssid, unsigned frame) {
+  // 4-char alphanumeric display: a spinner glyph rotating in all positions.
+  static const char* const spinner[] = { "||||", "////", "----", "\\\\\\\\" };
+  led_display.print(spinner[frame % 4]);
+
+  // OLED: SSID with a row of growing dots (0..3).
+  char dots[4] = "   ";
+  for (unsigned i = 0; i < frame % 4; i++) { dots[i] = '.'; }
+
+  oled_display.clearDisplay();
+  oled_display.setTextSize(1);
+  oled_display.setTextColor(SSD1306_WHITE);
+  oled_display.setCursor(0, 0);
+  oled_display.println("Connecting WiFi");
+  oled_display.println("");
+  oled_display.println(ssid);
+  oled_display.println("");
+  oled_display.print(dots);
+  oled_display.display();
+}
+
 // Try a single network, blocking until it associates or times out.
 static bool wifi_try(const WifiNetwork& net) {
   Serial.print("INIT WiFi: ");
@@ -64,6 +87,7 @@ static bool wifi_try(const WifiNetwork& net) {
   WiFi.begin(net.ssid, net.password);
 
   unsigned long start = millis();
+  unsigned frame = 0;
   while (WiFi.status() != WL_CONNECTED || WiFi.localIP() == IPAddress(0, 0, 0, 0)) {
     if (millis() - start > config__wifi_connect_timeout_ms) {
       Serial.println();
@@ -71,6 +95,7 @@ static bool wifi_try(const WifiNetwork& net) {
       Serial.println(net.ssid);
       return false;
     }
+    wifi_show_connecting(net.ssid, frame++);
     WDT.refresh();
     delay(250);
     Serial.print(".");
@@ -102,13 +127,24 @@ static void wifi_connect() {
 
 void setup_net() {
   wifi_connect();
+
+  // Keep WiFi status off the 4-char LED; just clear the connect spinner.
+  led_display.print("CAFE");
+
+  oled_display.clearDisplay();
+  oled_display.setTextSize(1);
+  oled_display.setTextColor(SSD1306_WHITE);
+  oled_display.setCursor(0, 0);
+
   if (wifi_ready) {
-    oled_display.println("WIFI OK");
+    oled_display.println("WiFi OK");
+    oled_display.println("");
+    oled_display.println(WiFi.localIP());
     oled_display.display();
     delay(2000);
     check_for_update(/*verbose=*/true);
   } else {
-    oled_display.println("Failed to connect to WIFI");
+    oled_display.println("WiFi failed");
     oled_display.display();
     delay(2000);
   }

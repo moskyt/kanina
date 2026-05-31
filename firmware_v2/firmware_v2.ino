@@ -189,7 +189,7 @@ step 2:
 complete when weight is (brew_target_weight)
 */
 
-int brew_target_weight = 250;
+int brew_target_weight = 320;
 
 // BREW program
 enum brew_step_ { b_idle, b_heatup1, b_preheat1, b_flow1, b_heatup2, b_preheat2, b_flow2, b_done, b_error } brew_step;

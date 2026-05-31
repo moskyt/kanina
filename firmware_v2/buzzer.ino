@@ -34,15 +34,15 @@ void buzzer_init() {
 
 void buzzer_start_preheat() {
   static const uint16_t melody[] = { NOTE_A4, NOTE_A4, NOTE_A4 };
-  play_melody(melody, 50, 10);
+  play_melody(melody, 100, 20);
 }
 
 void buzzer_start_brew() {
   static const uint16_t melody[] = { NOTE_A4, NOTE_F5, NOTE_A4 };
-  play_melody(melody, 50, 10);
+  play_melody(melody, 100, 20);
 }
 
 void buzzer_start_bootstrap() {
   static const uint16_t melody[] = { NOTE_A4, NOTE_A4 };
-  play_melody(melody, 50, 10);
+  play_melody(melody, 100, 20);
 }
