@@ -306,6 +306,7 @@ void loop_brew(unsigned long now) {
       Serial.println(" ms");
 
       buzzer_start_preheat();
+      neo_brew_actual();
       start_preheat(now);
       brew_step = b_preheat1;
     }

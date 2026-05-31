@@ -36,6 +36,7 @@ void mx__stopPump() {
 }
 
 void mx__runHeater(unsigned short int power) {
+  if (measurement_temperature > 105) { power = 0; }
   analogWrite(PIN_HEATER, power);
 }
 
@@ -122,8 +123,11 @@ void neo_update() {
 }
 
 void neo_brew() {
-  // neo_solid(255, 0, 255);
-  neo_pulse(255, 0, 255, 0, 0, 255, 3.0); 
+  neo_pulse(255, 0, 255, 0, 0, 255, 3.0);
+}
+
+void neo_brew_actual() {
+  neo_pulse(255, 0, 255, 255, 0, 0, 3.0);
 }
 
 void neo_error() {

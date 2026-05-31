@@ -18,13 +18,34 @@
 
 static constexpr int   UPDATE_MAX_REDIRECTS = 4;
 static constexpr int   UPDATE_CONNECT_RETRIES = 3;
+// Per-attempt TLS connect deadline, enforced by the ESP32 co-processor. MUST
+// stay below the WiFiS3 modem's 10 s buf_read window: otherwise a stalled
+// handshake makes the host give up while the co-processor is still working,
+// desyncing the AT protocol and wedging every later modem call (the original
+// "stuck on found vX forever" hang). Without this the connect uses the
+// no-timeout +SSLCLIENTCONNECTNAME command and can never self-heal.
+static constexpr int   UPDATE_CONNECT_TIMEOUT_MS = 8000;
 static constexpr unsigned long UPDATE_HTTP_TIMEOUT_MS = 20000;
 static constexpr unsigned long UPDATE_OLED_PROGRESS_MS = 500;
+// Absolute ceiling for a single header line: read_line's inactivity timeout is
+// reset on every byte, so a server that trickles bytes forever would otherwise
+// never return. This caps the total time spent on one line.
+static constexpr unsigned long UPDATE_LINE_MAX_MS = 30000;
+// Absolute ceiling for the whole body download, independent of the per-chunk
+// inactivity timeout. Stops a slow-drip transfer from running indefinitely.
+static constexpr unsigned long UPDATE_DOWNLOAD_MAX_MS = 180000;
 
 // Retrying SSL connect — the Azure-backed asset host (release-assets.*) is
 // flaky on first contact, and the WiFiS3 stack sometimes needs a second try.
 static bool ssl_connect(WiFiSSLClient& client, const char* host, uint16_t port) {
+  // Bound the handshake on the co-processor so connect() returns instead of
+  // wedging the modem when the CDN is slow. See UPDATE_CONNECT_TIMEOUT_MS.
+  client.setConnectionTimeout(UPDATE_CONNECT_TIMEOUT_MS);
   for (int attempt = 1; attempt <= UPDATE_CONNECT_RETRIES; attempt++) {
+    char detail[48];
+    snprintf(detail, sizeof(detail), "connect %d/%d\n%s",
+             attempt, UPDATE_CONNECT_RETRIES, host);
+    oled_phase("Update", detail);
     client.stop();
     WDT.refresh();
     if (client.connect(host, port)) { return true; }
@@ -50,6 +71,32 @@ static void oled_status(const char* line1, const char* line2 = nullptr) {
     oled_display.setTextSize(1);
     oled_display.setCursor(0, 24);
     oled_display.println(line2);
+  }
+  oled_display.display();
+}
+
+// A spinner that advances on every call. The connect/redirect/read steps each
+// block (we can't animate mid-call), but painting this before each hop and each
+// retry turns the previously-silent "found vX" gap into visible motion, so a
+// slow-but-working update can be told apart from a wedged one.
+static const char UPDATE_SPIN[4] = { '|', '/', '-', '\\' };
+static uint8_t update_spin_i = 0;
+
+static void oled_phase(const char* title, const char* detail) {
+  oled_display.clearDisplay();
+  oled_display.setTextColor(SSD1306_WHITE);
+
+  oled_display.setTextSize(2);
+  oled_display.setCursor(0, 0);
+  oled_display.print(title);
+  // spinner glyph in the top-right of the title row
+  oled_display.setCursor(SCREEN_WIDTH - 12, 0);
+  oled_display.print(UPDATE_SPIN[update_spin_i++ & 3]);
+
+  if (detail) {
+    oled_display.setTextSize(1);
+    oled_display.setCursor(0, 24);
+    oled_display.println(detail);  // GFX wraps long hostnames automatically
   }
   oled_display.display();
 }
@@ -103,8 +150,9 @@ static void send_get(WiFiSSLClient& c, const String& host, const String& path) {
 // Read one CRLF-terminated header line. Returns "" on timeout / EOF.
 static String read_line(WiFiSSLClient& c) {
   String line;
-  unsigned long deadline = millis() + UPDATE_HTTP_TIMEOUT_MS;
-  while (millis() < deadline) {
+  unsigned long deadline = millis() + UPDATE_HTTP_TIMEOUT_MS;  // inactivity
+  unsigned long hard = millis() + UPDATE_LINE_MAX_MS;          // absolute cap
+  while (millis() < deadline && millis() < hard) {
     WDT.refresh();
     if (c.available()) {
       int ch = c.read();
@@ -159,13 +207,18 @@ static bool open_followed(WiFiSSLClient& client, const String& start_url, HttpHe
       return false;
     }
     Log.print("UPDATE: GET "); Log.print(u.host); Log.println(u.path);
+    char detail[48];
+    snprintf(detail, sizeof(detail), "fetch [%d]\n%s", hop + 1, u.host.c_str());
+    oled_phase("Update", detail);
     if (!ssl_connect(client, u.host.c_str(), 443)) {
       Log.print("UPDATE: connect failed: "); Log.println(u.host);
+      oled_status("Update failed", "no connection");
       return false;
     }
     send_get(client, u.host, u.path);
     if (!read_head(client, out_head)) {
       Log.println("UPDATE: bad HTTP response");
+      oled_status("Update failed", "no response");
       return false;
     }
     Log.print("UPDATE: status "); Log.println(out_head.status);
@@ -175,9 +228,13 @@ static bool open_followed(WiFiSSLClient& client, const String& start_url, HttpHe
       continue;
     }
     Log.print("UPDATE: unexpected status "); Log.println(out_head.status);
+    char sbuf[24];
+    snprintf(sbuf, sizeof(sbuf), "HTTP %d", out_head.status);
+    oled_status("Update failed", sbuf);
     return false;
   }
   Log.println("UPDATE: too many redirects");
+  oled_status("Update failed", "too many hops");
   return false;
 }
 
@@ -248,6 +305,7 @@ static bool download_and_apply(const String& tag) {
   }
   if (head.content_length <= 0) {
     Log.println("UPDATE: missing Content-Length, refusing to flash");
+    oled_status("Update failed", "no length");
     ssl.stop();
     return false;
   }
@@ -263,14 +321,15 @@ static bool download_and_apply(const String& tag) {
 
   if (InternalStorage.open(head.content_length) != 1) {
     Log.println("UPDATE: InternalStorage.open failed");
-    oled_status("Update", "open failed");
+    oled_status("Update failed", "storage open");
     ssl.stop();
     return false;
   }
 
   uint8_t buf[256];
   long remaining = head.content_length;
-  unsigned long deadline = millis() + UPDATE_HTTP_TIMEOUT_MS;
+  unsigned long deadline = millis() + UPDATE_HTTP_TIMEOUT_MS;  // inactivity
+  unsigned long hard = millis() + UPDATE_DOWNLOAD_MAX_MS;      // absolute cap
   unsigned long last_progress = 0;
   while (remaining > 0) {
     WDT.refresh();
@@ -289,9 +348,9 @@ static bool download_and_apply(const String& tag) {
       }
     } else if (!ssl.connected()) {
       break;
-    } else if (millis() > deadline) {
+    } else if (millis() > deadline || millis() > hard) {
       Log.println("UPDATE: download timeout");
-      oled_status("Update", "timeout");
+      oled_status("Update failed", "timeout");
       InternalStorage.close();
       ssl.stop();
       return false;
@@ -303,7 +362,7 @@ static bool download_and_apply(const String& tag) {
 
   if (remaining != 0) {
     Log.print("UPDATE: short read, "); Log.print(remaining); Log.println(" bytes missing");
-    oled_status("Update", "short read");
+    oled_status("Update failed", "short read");
     return false;
   }
 
@@ -346,9 +405,11 @@ void check_for_update(bool verbose) {
     char msg[24];
     snprintf(msg, sizeof(msg), "found %s", tag.c_str());
     oled_status("Update", msg);
+    delay(800); // let the user see which version we're fetching
     download_and_apply(tag); // on success this never returns (apply() resets)
-    // if we get here the download failed; keep the failure message visible
-    delay(2000);
+    // if we get here the download failed; download_and_apply() has already
+    // painted the specific reason — hold it long enough to read.
+    delay(4000);
   }
 
   global_state = s_idle;
