@@ -503,6 +503,9 @@ void loop() {
     update_flag = false;
   }
 
+  //--- status neopixel pulse (runs every loop for smooth breathing)
+  neo_tick(now);
+
   //--- buttons hardware
   button.loop();
   set_up.loop();

@@ -26,6 +26,10 @@ constexpr int   config__brew_pump = 100;
 constexpr int brew_bloom_time = 30000;
 constexpr int brew_bloom_weight = 50;
 
+// once brewing is done, fall back to idle after the pot is lifted off the
+// scale (the reading drops well below zero once the tared pot is removed)
+constexpr int brew_done_pot_removed_weight = -50;
+
 constexpr float pid_creep_delta = 0.5;
 constexpr float pid_target_dt = 0.1;
 
