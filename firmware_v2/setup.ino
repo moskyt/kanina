@@ -12,8 +12,8 @@ void setup() {
   Serial.println(FIRMWARE_VERSION);
   Serial.println("");
 
-  Modulino.begin();
   buzzer.begin();
+  buzzer_helo();
 
   setup_pins();
   setup_scale();

@@ -29,13 +29,26 @@ constexpr int brew_bloom_weight = 50;
 constexpr float pid_creep_delta = 0.5;
 constexpr float pid_target_dt = 0.1;
 
-constexpr const char* config__wifi_ssid     = "haf2201";
-constexpr const char* config__wifi_password = "1a2b3c4d5e";
+struct WifiNetwork {
+  const char* ssid;
+  const char* password;
+};
+
+// Networks are tried in order at connect time; the first one that associates
+// within config__wifi_connect_timeout_ms wins. Add more entries as needed.
+constexpr WifiNetwork config__wifi_networks[] = {
+  { "haf2201", "1a2b3c4d5e" },
+  // { "second-network", "password" },
+};
+constexpr unsigned config__wifi_network_count =
+  sizeof(config__wifi_networks) / sizeof(config__wifi_networks[0]);
+
+// Per-network association timeout.
 constexpr unsigned long config__wifi_connect_timeout_ms = 15000;
 
 // Bump this string before every release; the GitHub release tag must match
 // exactly (e.g. tag "v0.1.0" -> FIRMWARE_VERSION "v0.1.0").
-constexpr const char* FIRMWARE_VERSION = "v0.1.8";
+constexpr const char* FIRMWARE_VERSION = "v0.1.9";
 
 constexpr const char* config__github_owner = "moskyt";
 constexpr const char* config__github_repo  = "kanina";

@@ -4,8 +4,8 @@
 #include <QuickPID.h>
 #include <Button2.h>
 // Button2 #defines LOW/HIGH/INPUT/OUTPUT/INPUT_PULLUP as plain ints. On the R4
-// (Renesas) core these are PinStatus enum values, so the macros clobber the enum
-// and break Modulino's isPressed(). Undo the pollution to restore the enum.
+// (Renesas) core these are PinStatus enum values, so the macros clobber the enum.
+// Undo the pollution to restore the enum for the core and the includes below.
 #undef LOW
 #undef HIGH
 #undef INPUT
@@ -15,16 +15,7 @@
 #include <WDT.h>
 #include <HX711_ADC.h>
 #include <WiFiS3.h>
-// Adafruit_SSD1306 #defines BLACK/WHITE as ints; Modulino declares them as
-// ModulinoColor globals, so the macros wreck its declarations. Hide the macros
-// only while Modulino.h is parsed, then restore them for the display code.
-#pragma push_macro("BLACK")
-#pragma push_macro("WHITE")
-#undef BLACK
-#undef WHITE
-#include <Modulino.h>
-#pragma pop_macro("BLACK")
-#pragma pop_macro("WHITE")
+#include "mini_buzzer.h"
 
 #include "config.h"
 #include "update.h"
@@ -139,7 +130,7 @@ bool pump_primed = false;
 
 Adafruit_NeoPixel neopixel = Adafruit_NeoPixel(1, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
 
-ModulinoBuzzer buzzer;
+MiniBuzzer buzzer;
 
 Button2 button, set_up, set_down;
 

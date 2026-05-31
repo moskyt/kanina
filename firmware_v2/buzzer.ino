@@ -1,3 +1,16 @@
+void buzzer_helo() {
+  buzzer.tone(440, 100);
+  delay(200);
+  buzzer.tone(0, 0);
+  delay(50);
+  buzzer.tone(554, 100);
+  delay(200);
+  buzzer.tone(0, 0);
+  delay(50);
+  buzzer.tone(659, 100);
+  delay(200);
+  buzzer.tone(0, 0);
+}
 void buzzer_start_preheat() {
   buzzer.tone(440, 100);
   delay(200);

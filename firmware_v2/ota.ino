@@ -56,18 +56,20 @@ void telnet_poll_cli() {
   }
 }
 
-static void wifi_connect() {
+// Try a single network, blocking until it associates or times out.
+static bool wifi_try(const WifiNetwork& net) {
   Serial.print("INIT WiFi: ");
-  Serial.println(config__wifi_ssid);
+  Serial.println(net.ssid);
 
-  WiFi.begin(config__wifi_ssid, config__wifi_password);
+  WiFi.begin(net.ssid, net.password);
 
   unsigned long start = millis();
   while (WiFi.status() != WL_CONNECTED || WiFi.localIP() == IPAddress(0, 0, 0, 0)) {
     if (millis() - start > config__wifi_connect_timeout_ms) {
       Serial.println();
-      Serial.println("WiFi connect TIMEOUT.");
-      return;
+      Serial.print("WiFi connect TIMEOUT: ");
+      Serial.println(net.ssid);
+      return false;
     }
     WDT.refresh();
     delay(250);
@@ -75,16 +77,27 @@ static void wifi_connect() {
   }
 
   Serial.println();
-  Serial.print("WiFi connected, IP = ");
-  Serial.println(WiFi.localIP());
+  return true;
+}
 
-  telnet_server.begin();
-  Serial.print("Telnet listening on ");
-  Serial.print(WiFi.localIP());
-  Serial.print(":");
-  Serial.println(config__telnet_port);
+static void wifi_connect() {
+  for (unsigned i = 0; i < config__wifi_network_count; i++) {
+    if (!wifi_try(config__wifi_networks[i])) { continue; }
 
-  wifi_ready = true;
+    Serial.print("WiFi connected, IP = ");
+    Serial.println(WiFi.localIP());
+
+    telnet_server.begin();
+    Serial.print("Telnet listening on ");
+    Serial.print(WiFi.localIP());
+    Serial.print(":");
+    Serial.println(config__telnet_port);
+
+    wifi_ready = true;
+    return;
+  }
+
+  Serial.println("WiFi: no network available.");
 }
 
 void setup_net() {
