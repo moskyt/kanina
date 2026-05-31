@@ -3,11 +3,28 @@
 #include <Adafruit_SSD1306.h>
 #include <QuickPID.h>
 #include <Button2.h>
-#include <Adafruit_NeoPixel.h> 
+// Button2 #defines LOW/HIGH/INPUT/OUTPUT/INPUT_PULLUP as plain ints. On the R4
+// (Renesas) core these are PinStatus enum values, so the macros clobber the enum
+// and break Modulino's isPressed(). Undo the pollution to restore the enum.
+#undef LOW
+#undef HIGH
+#undef INPUT
+#undef OUTPUT
+#undef INPUT_PULLUP
+#include <Adafruit_NeoPixel.h>
 #include <WDT.h>
 #include <HX711_ADC.h>
 #include <WiFiS3.h>
+// Adafruit_SSD1306 #defines BLACK/WHITE as ints; Modulino declares them as
+// ModulinoColor globals, so the macros wreck its declarations. Hide the macros
+// only while Modulino.h is parsed, then restore them for the display code.
+#pragma push_macro("BLACK")
+#pragma push_macro("WHITE")
+#undef BLACK
+#undef WHITE
 #include <Modulino.h>
+#pragma pop_macro("BLACK")
+#pragma pop_macro("WHITE")
 
 #include "config.h"
 #include "update.h"
