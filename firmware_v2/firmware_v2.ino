@@ -290,7 +290,6 @@ void handle_main(Button2& btn) {
   if (global_state == s_brew) {
     if (brew_step == b_error) {
       global_state = s_idle;
-      brew_step = b_idle;
       neo_idle();
     } else {
       // stop brew!

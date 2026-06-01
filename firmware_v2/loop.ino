@@ -68,28 +68,17 @@ void print_brew_flow_serial() {
 void update_displays() {
   //--- show gauges
   int n_temp;
-  if (measurement_temperature < 90.0)
+  const float t_min = 80.0;
+  const float t_max = 100.0;
+  if (measurement_temperature < t_min)
     n_temp = 0;
+  else if (measurement_temperature > t_max)
+    n_temp = 255;
   else
-    n_temp = map((int)measurement_temperature, 90, 100, 0, 255);
+    n_temp = map((int)measurement_temperature, t_min, t_max, 0, 255);
   analogWrite(PIN_METER_TEMP, n_temp);
   int n_power = signal_heater;
   analogWrite(PIN_METER_POWER, n_power);
-
-  //--- neo
-  if (global_state == s_idle) {
-    neo_idle();
-  } 
-  if (global_state == s_brew) {
-    if (brew_step == b_error) {
-      neo_error();
-    } else
-    if (brew_step == b_done) {
-      neo_done();
-    } else {
-      neo_brew();
-    }
-  }
 
   //--- print LED
   if (global_state == s_brew) {
@@ -106,7 +95,7 @@ void update_displays() {
   oled_display.setCursor(0,0);
 
   char tmp[22];
-  
+
   snprintf(tmp, sizeof(tmp), "Temp: %5.1f C", measurement_temperature);
   oled_display.println(tmp);
 
@@ -401,18 +390,17 @@ void loop_brew(unsigned long now) {
     // the weight drops below zero the tared pot has clearly been lifted off.
     if (measurement_weight < 0) {
       global_state = s_idle;
-      brew_step = b_idle;
       neo_idle();
     }
   }
   else {
     // brew cancelled
-    if (now >= program_start + 15000) {
+    if (now >= program_start + 30000) {
+      // go back to IDLE
       global_state = s_idle;
       neo_idle();
     } else {
       strncpy(brew_ux, "(cancelled)", sizeof(brew_ux));
-      neo_error();
     }
   }
 }
@@ -421,6 +409,7 @@ void loop_cool(unsigned long now) {
   if (measurement_temperature < cool_target) {
     Serial.println("COOL program ends");
     global_state = s_idle;
+    neo_idle();
     signal_pump = 0;
   } else {
     signal_pump = 255;

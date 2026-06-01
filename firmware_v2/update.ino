@@ -86,7 +86,7 @@ static void oled_phase(const char* title, const char* detail) {
   oled_display.clearDisplay();
   oled_display.setTextColor(SSD1306_WHITE);
 
-  oled_display.setTextSize(2);
+  oled_display.setTextSize(1);
   oled_display.setCursor(0, 0);
   oled_display.print(title);
   // spinner glyph in the top-right of the title row
@@ -312,6 +312,24 @@ static bool download_and_apply(const String& tag) {
 
   Log.print("UPDATE: downloading "); Log.print(head.content_length);
   Log.print(" bytes for "); Log.println(tag);
+
+  // The R4's OTA scheme stages the image in the upper half of flash and copies
+  // it down over the running sketch at apply(), so the largest OTA-flashable
+  // image is half the usable flash (~122 KB). InternalStorage.open() returns 0
+  // for an oversize image with no way to tell that apart from a real flash
+  // fault, so check up front and say so plainly. USB upload has no such limit
+  // (full ~240 KB region), which is why a too-big build still flashes over USB.
+  long ota_max = InternalStorage.maxSize();
+  if (head.content_length > ota_max) {
+    Log.print("UPDATE: image too big for OTA — "); Log.print(head.content_length);
+    Log.print(" > "); Log.print(ota_max); Log.println(" (flash over USB)");
+    char msg[24];
+    snprintf(msg, sizeof(msg), "%ldk > %ldk", head.content_length / 1024, ota_max / 1024);
+    oled_status("Too big for OTA", msg);
+    ssl.stop();
+    delay(4000);
+    return false;
+  }
 
   // From here on, the heater/pump must be off; the apply() will reset the board.
   mx__shutdown();

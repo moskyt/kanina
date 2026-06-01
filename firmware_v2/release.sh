@@ -78,7 +78,22 @@ if [ ! -f "$BIN_PATH" ]; then
   exit 1
 fi
 cp "$BIN_PATH" "$ASSET_PATH"
-echo "built: $ASSET_PATH ($(wc -c < "$ASSET_PATH") bytes)"
+BIN_SIZE="$(wc -c < "$ASSET_PATH")"
+echo "built: $ASSET_PATH ($BIN_SIZE bytes)"
+
+# OTA ceiling: the R4 ArduinoOTA scheme stages the image in the upper half of
+# usable flash, so the largest OTA-flashable image is (MAX_FLASH - SKETCH_START)/2
+# page-aligned = (262144 - 0x4000)/2 floored to 0x800 = 122880 bytes. A bigger
+# image still flashes fine over USB but fails OTA at InternalStorage.open()
+# ("storage open" / "Too big for OTA" on the device). Block the release so we
+# don't ship a firmware that can never self-update.
+OTA_MAX=122880
+if [ "$BIN_SIZE" -gt "$OTA_MAX" ]; then
+  echo "ERROR: $ASSET_PATH is $BIN_SIZE bytes, over the $OTA_MAX-byte OTA limit." >&2
+  echo "Devices could not self-update to this build (USB flashing would still work)." >&2
+  echo "Shrink the firmware (e.g. trim features/strings) before releasing." >&2
+  exit 1
+fi
 
 # --- commit + tag + push -----------------------------------------------------
 

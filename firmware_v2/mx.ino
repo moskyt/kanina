@@ -94,7 +94,12 @@ void neo_pulse(uint8_t r1, uint8_t g1, uint8_t b1,
 void neo_tick(unsigned long now) {
   if (neo_mode != neo_mode_pulse) return;
   float phase = (float)(now % neo_period_ms) / (float)neo_period_ms;  // 0..1
-  float f = 0.5 * (1.0 - cos(phase * 2.0 * PI));                      // 0..1..0
+  // Breathing curve, 0..1..0. A raised cosine here would drag the whole libm
+  // trig stack (rem_pio2/kernel_cos, ~3.8 KB) into the image and push it over
+  // the ~120 KB OTA ceiling. A triangle wave through smoothstep is visually
+  // indistinguishable and uses only multiplies. See OTA size check in update.ino.
+  float tri = 1.0 - fabs(2.0 * phase - 1.0);   // 0..1..0, linear
+  float f = tri * tri * (3.0 - 2.0 * tri);     // smoothstep ease
   uint8_t r = neo_r1 + (int)lround((neo_r2 - neo_r1) * f);
   uint8_t g = neo_g1 + (int)lround((neo_g2 - neo_g1) * f);
   uint8_t b = neo_b1 + (int)lround((neo_b2 - neo_b1) * f);

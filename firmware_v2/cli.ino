@@ -16,6 +16,7 @@ void process_cli(char* input) {
     Log.println("Shutdown requested.");
     mx__shutdown();
     global_state = s_idle;
+    neo_idle();
   } else
   if (strcmp(input, "RESET") == 0) {
     Log.println("Reset requested.");
