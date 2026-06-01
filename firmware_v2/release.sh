@@ -19,6 +19,18 @@ fi
 VERSION="$1"
 FQBN="arduino:renesas_uno:unor4wifi"
 
+# Link-time optimization. Worth ~10% flash (~13 KB on this firmware), which
+# matters because OTA is capped at half the flash (see the OTA_MAX guard below).
+# -Wl,-u,cm_backtrace_fault forces the Renesas fault handler to be kept: it's
+# only referenced from the core's assembly, so LTO's symbol GC drops it
+# otherwise ("undefined reference to cm_backtrace_fault" at link). -ffat-lto-objects
+# keeps the build robust if a precompiled .a in the mix lacks LTO bytecode.
+LTO_PROPS=(
+  --build-property "compiler.c.extra_flags=-flto -ffat-lto-objects"
+  --build-property "compiler.cpp.extra_flags=-flto -ffat-lto-objects"
+  --build-property "compiler.c.elf.extra_flags=-flto -fuse-linker-plugin -Wl,-u,cm_backtrace_fault"
+)
+
 SKETCH_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKETCH_NAME="$(basename "$SKETCH_DIR")"
 BUILD_DIR="${SKETCH_DIR}/build"
@@ -69,9 +81,9 @@ fi
 
 # --- build -------------------------------------------------------------------
 
-echo "building $SKETCH_NAME for $FQBN..."
+echo "building $SKETCH_NAME for $FQBN (LTO)..."
 rm -rf "$BUILD_DIR"
-arduino-cli compile --fqbn "$FQBN" --build-path "$BUILD_DIR" .
+arduino-cli compile --fqbn "$FQBN" --build-path "$BUILD_DIR" "${LTO_PROPS[@]}" .
 
 if [ ! -f "$BIN_PATH" ]; then
   echo "build did not produce $BIN_PATH" >&2
