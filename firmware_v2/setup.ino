@@ -32,11 +32,10 @@ void setup() {
 
   Serial.println("INIT done.");
 
-  global_state = s_idle;
+  perform__idle();
   signal_pump = 0;
   signal_heater = 0;
   signal_spray = 0;
-  neo_idle();
   buzzer_init();
   show_led_number(brew_target_weight);
 }

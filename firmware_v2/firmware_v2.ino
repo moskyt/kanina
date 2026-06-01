@@ -93,7 +93,8 @@ enum global_state_ { s_init,                  // startup
                      s_pid,                   // simple PID heatup
                      s_flow,                  // flow rate measurement
                      s_cool,                  // cooldown by pump
-                     s_update                 // self-update from GitHub Releases
+                     s_update,                // self-update from GitHub Releases
+                     s_error                  // cancel/overheat/something
                      } global_state;
 
 unsigned short signal_spray = 0;
@@ -192,7 +193,7 @@ complete when weight is (brew_target_weight)
 int brew_target_weight = 320;
 
 // BREW program
-enum brew_step_ { b_idle, b_heatup1, b_preheat1, b_flow1, b_heatup2, b_preheat2, b_flow2, b_done, b_error } brew_step;
+enum brew_step_ { b_idle, b_heatup1, b_preheat1, b_flow1, b_heatup2, b_preheat2, b_flow2, b_done } brew_step;
 
 long brew_temperature;
 long brew_base_power;
@@ -223,83 +224,14 @@ float decay1 = 0;
 float dt;
 unsigned long last_pid_t = 0;
 
-// --- BUTTON HANDLERS
+// Keep at least one function definition in this main sketch file. arduino-cli
+// anchors the auto-generated function prototypes to the first function in the
+// main .ino; if there is none, the whole prototype block is emitted at the very
+// top of the merged translation unit — before this file's #includes — so the
+// prototypes for helpers taking library/config types (WifiNetwork from config.h,
+// WiFiSSLClient from WiFiS3.h, etc.) reference types that aren't declared yet and
+// the build fails with misleading "does not name a type" errors in ota/update.
+// All real code now lives in topical .ino files, so this anchor stands in. Do not
+// remove it unless setup()/loop() (or another function) move back into this file.
+void firmware_anchor() {}
 
-void handle_set_up(Button2& btn) {
-  Serial.println("up");
-
-  if (global_state == s_idle || global_state == s_bootstrap) {
-    if (brew_target_weight < 500) brew_target_weight += 10;
-    show_led_number(brew_target_weight);
-  }
-}
-
-void handle_set_down(Button2& btn) {
-  Serial.println("down");
-
-  if (global_state == s_idle || global_state == s_bootstrap) {
-    if (brew_target_weight > 100) brew_target_weight -= 10;
-    show_led_number(brew_target_weight);
-  }
-}
-
-void handle_main_long(Button2& btn) {
-  Serial.println("Pressed button for long.");
-  if (global_state == s_idle) {
-    // start bootstrap!
-    pid_target = config__bootstrap_temperature;
-    Serial.print("Bootstrap requested: ");
-    Serial.println(config__bootstrap_temperature);
-
-    global_state = s_bootstrap;
-    Input = measurement_temperature;
-    Setpoint = measurement_temperature + 1;
-    if (Setpoint > pid_target) Setpoint = pid_target;
-    pid_creep_timer = 0;
-    pid_print_counter = 0; 
-    accumulated_heat = 0.0;
-
-    heaterPID.SetTunings(K1p, K1i, K1d);
-    heaterPID.SetMode(heaterPID.Control::automatic);
-    heaterPID.SetOutputLimits(0, 255);
-    heaterPID.Reset();    
-    buzzer_start_bootstrap();
-    neo_bootstrap();
-  } else 
-  if (global_state == s_bootstrap) {
-    global_state = s_idle;
-    neo_idle();
-    mx__shutdown();
-  } 
-  update_flag = true;
-}
-
-void handle_main(Button2& btn) {
-  Serial.println("Pressed button.");
-
-  if ((global_state == s_idle) || (global_state == s_bootstrap)) {
-    // start brew!
-    brew_temperature = config__brew_temperature;
-    brew_base_power = config__brew_base_power;
-    brew_preheat_time = config__brew_preheat_time;
-    global_state = s_brew;
-    brew_step = b_idle;
-    buzzer_start_brew();
-    neo_brew();
-  } else
-  if (global_state == s_brew) {
-    if (brew_step == b_error) {
-      global_state = s_idle;
-      neo_idle();
-    } else {
-      // stop brew!
-      mx__shutdown();
-      signal_pump = 0;
-      signal_heater = 0;
-      signal_spray = 0;
-      brew_step = b_error;
-      neo_error();
-    }
-  }
-  update_flag = true;
-}

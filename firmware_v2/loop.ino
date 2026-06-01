@@ -389,16 +389,14 @@ void loop_brew(unsigned long now) {
     // The pot is full of coffee (200+ g) when brewing finishes, so the moment
     // the weight drops below zero the tared pot has clearly been lifted off.
     if (measurement_weight < 0) {
-      global_state = s_idle;
-      neo_idle();
+      perform__idle();
     }
   }
   else {
     // brew cancelled
     if (now >= program_start + 30000) {
       // go back to IDLE
-      global_state = s_idle;
-      neo_idle();
+      perform__idle();
     } else {
       strncpy(brew_ux, "(cancelled)", sizeof(brew_ux));
     }
@@ -408,8 +406,7 @@ void loop_brew(unsigned long now) {
 void loop_cool(unsigned long now) {
   if (measurement_temperature < cool_target) {
     Serial.println("COOL program ends");
-    global_state = s_idle;
-    neo_idle();
+    perform__idle();
     signal_pump = 0;
   } else {
     signal_pump = 255;
@@ -431,8 +428,7 @@ void loop_flow(unsigned long now) {
     dtostrf(evaluated_flow_rate, 0, 1, buf);  // (value, min_width, decimal_places, buffer)
     Serial.print(buf);
     Serial.println(" g/s");
-    global_state = s_idle;
-    signal_pump = 0;
+    perform__idle();
   } else {
     if (signal_pump == 0) {
       Serial.print("Flow program starting at ");
@@ -529,8 +525,8 @@ void loop() {
   if (global_state == s_brew) loop_brew(now);  
   
   //--- HO
-  if (measurement_temperature > 99) {
-    signal_heater = 0;
+  if (measurement_temperature > 105) {
+    perform__error();
   }
 
   //--- actuators

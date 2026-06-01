@@ -430,6 +430,5 @@ void check_for_update(bool verbose) {
     delay(4000);
   }
 
-  global_state = s_idle;
-  neo_idle();
+  perform__idle();
 }
