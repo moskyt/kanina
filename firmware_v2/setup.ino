@@ -1,5 +1,71 @@
 #include <Button2.h>
 
+// --- Reset cause -------------------------------------------------------------
+// The RA4M1 latches why it last reset in RSTSR0/1/2. We snapshot it at the very
+// start of setup() (before anything can clear it), then clear the flags so the
+// *next* boot's registers describe only the next reset. A plain power-on (PORF)
+// is the boring case; anything else (watchdog, brownout/LVD, software) gets an
+// OLED splash so a mid-brew reset leaves a visible trail.
+//
+// Note: a brownout deep enough to drop the rail to 0 V looks like a power-on
+// (PORF) and will NOT splash; an LVD-detected dip or a watchdog timeout will.
+static uint8_t  reset_rstsr0 = 0;  // bit0 PORF, bit1-3 LVD0/1/2RF, bit7 DPSRSTF
+static uint16_t reset_rstsr1 = 0;  // bit0 IWDTRF, bit1 WDTRF, bit2 SWRF
+static uint8_t  reset_rstsr2 = 0;  // bit0 CWSF (cold/warm start)
+
+static bool reset_was_power_on() {
+  return (reset_rstsr0 & 0x01) != 0;  // PORF
+}
+
+static const char* reset_cause_label() {
+  if (reset_rstsr1 & 0x0002) return "WATCHDOG";       // WDTRF
+  if (reset_rstsr1 & 0x0001) return "IND.WATCHDOG";   // IWDTRF
+  if (reset_rstsr1 & 0x0004) return "SOFTWARE";       // SWRF
+  if (reset_rstsr0 & 0x000E) return "BROWNOUT/LVD";   // LVD0/1/2RF
+  if (reset_rstsr0 & 0x0080) return "DEEP-STANDBY";   // DPSRSTF
+  if (reset_rstsr1 & 0x0300) return "RAM ERROR";      // RPERF/REERF
+  return "EXT / PIN";                                 // nothing latched (NRST, upload)
+}
+
+static void capture_reset_cause() {
+  reset_rstsr0 = R_SYSTEM->RSTSR0;
+  reset_rstsr1 = R_SYSTEM->RSTSR1;
+  reset_rstsr2 = R_SYSTEM->RSTSR2;
+
+  char line[48];
+  snprintf(line, sizeof(line), "RESET cause: %s  [%02X %04X %02X]",
+           reset_was_power_on() ? "power-on" : reset_cause_label(),
+           reset_rstsr0, reset_rstsr1, reset_rstsr2);
+  Serial.println(line);
+
+  // Clear the flags (write 0; they live behind PRCR.PRC1) so the next boot
+  // reflects only the next reset. Leave RSTSR2/CWSF alone (different semantics).
+  R_SYSTEM->PRCR = 0xA502;  // unlock PRC1 (key 0xA5)
+  R_SYSTEM->RSTSR0 = 0;
+  R_SYSTEM->RSTSR1 = 0;
+  R_SYSTEM->PRCR = 0xA500;  // relock
+}
+
+static void oled_reset_cause_splash() {
+  oled_display.clearDisplay();
+  oled_display.setTextColor(SSD1306_WHITE);
+
+  oled_display.setTextSize(2);
+  oled_display.setCursor(0, 0);
+  oled_display.println("RESET");
+
+  oled_display.setTextSize(1);
+  oled_display.println("");
+  oled_display.print("cause: ");
+  oled_display.println(reset_cause_label());
+
+  char raw[22];
+  snprintf(raw, sizeof(raw), "%02X %04X %02X", reset_rstsr0, reset_rstsr1, reset_rstsr2);
+  oled_display.println(raw);
+
+  oled_display.display();
+}
+
 void setup() {  
  // global init
   global_state = s_init;
@@ -12,6 +78,8 @@ void setup() {
   Serial.println(FIRMWARE_VERSION);
   Serial.println("");
 
+  capture_reset_cause();
+
   buzzer.begin();
   buzzer_helo();
 
@@ -21,6 +89,13 @@ void setup() {
   setup_buttons();
   setup_led();
   setup_oled();
+
+  // If the last reset was anything other than a normal power-on, flash the
+  // cause on the OLED now (the WiFi/update screens overwrite it shortly).
+  if (!reset_was_power_on()) {
+    oled_reset_cause_splash();
+    delay(4000);  // hold long enough to read; WDT isn't running yet
+  }
 
   // setup_net() runs the boot-time update check, which performs TLS handshakes
   // that block inside WiFiSSLClient longer than the IWDT max (~5.5 s on RA4M1,

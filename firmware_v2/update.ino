@@ -64,7 +64,7 @@ static bool ssl_connect(WiFiSSLClient& client, const char* host, uint16_t port) 
 static void oled_status(const char* line1, const char* line2 = nullptr) {
   oled_display.clearDisplay();
   oled_display.setTextColor(SSD1306_WHITE);
-  oled_display.setTextSize(2);
+  oled_display.setTextSize(1);
   oled_display.setCursor(0, 0);
   oled_display.println(line1);
   if (line2) {
@@ -385,7 +385,7 @@ static bool download_and_apply(const String& tag) {
   }
 
   oled_progress(head.content_length, head.content_length);
-  oled_status("Applying", "resetting...");
+  oled_status("Update", "Applying and resetting...");
   Log.println("UPDATE: applying — board will reset");
   delay(100);
   InternalStorage.apply(); // reboots into the new firmware; does not return
