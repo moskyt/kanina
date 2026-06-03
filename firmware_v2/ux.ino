@@ -67,7 +67,7 @@ void print_brew_flow_serial() {
 
 void update_displays() {
   //--- show gauges
-  int t = (int)measurement_temperature;
+  int t = round(measurement_temperature);
   int n_temp;
   int t_min = 80;
   int t_b = brew_temperature;
