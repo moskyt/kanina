@@ -38,6 +38,7 @@ struct WifiNetwork {
 // within config__wifi_connect_timeout_ms wins. Add more entries as needed.
 constexpr WifiNetwork config__wifi_networks[] = {
   { "haf2201", "1a2b3c4d5e" },
+  { "orf2201", "1a2b3c4d5e" },
   // { "second-network", "password" },
 };
 constexpr unsigned config__wifi_network_count =

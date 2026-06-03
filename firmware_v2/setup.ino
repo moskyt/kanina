@@ -12,9 +12,52 @@
 static uint8_t  reset_rstsr0 = 0;  // bit0 PORF, bit1-3 LVD0/1/2RF, bit7 DPSRSTF
 static uint16_t reset_rstsr1 = 0;  // bit0 IWDTRF, bit1 WDTRF, bit2 SWRF
 static uint8_t  reset_rstsr2 = 0;  // bit0 CWSF (cold/warm start)
+static uint8_t  prev_boot_phase  = 0;  // boot phase reached before this reset (0 = none)
+static uint8_t  prev_boot_gstate = 0xFF;  // global_state at the reset (if running)
+static uint8_t  prev_boot_bstep  = 0xFF;  // brew_step at the reset (if in brew)
 
 static bool reset_was_power_on() {
   return (reset_rstsr0 & 0x01) != 0;  // PORF
+}
+
+static const char* boot_phase_label() {
+  switch (prev_boot_phase) {
+    case BP_HW_INIT:   return "HW init";
+    case BP_UPDATE:    return "update chk";
+    case BP_WDT_ARMED: return "WDT armed";
+    case BP_FIRST_NET: return "1st net";
+    case BP_RUNNING:   return "running";
+    default:           return "?";
+  }
+}
+
+// Fine location for a reset during normal operation (prev_boot_phase==BP_RUNNING):
+// the brew step if we were brewing, otherwise the global state.
+static const char* boot_run_label() {
+  if (prev_boot_gstate == s_brew) {
+    switch (prev_boot_bstep) {
+      case b_idle:     return "brew idle/tare";
+      case b_heatup1:  return "brew heatup1";
+      case b_preheat1: return "brew preheat1";  // 2nd scale.tare() lives here
+      case b_flow1:    return "brew flow1";
+      case b_heatup2:  return "brew heatup2";
+      case b_preheat2: return "brew preheat2";
+      case b_flow2:    return "brew flow2";
+      case b_done:     return "brew done";
+      default:         return "brew ?";
+    }
+  }
+  switch (prev_boot_gstate) {
+    case s_idle:      return "idle";
+    case s_bootstrap: return "bootstrap";
+    case s_pid:       return "pid";
+    case s_flow:      return "flow";
+    case s_cool:      return "cool";
+    case s_update:    return "update";
+    case s_error:     return "error";
+    case s_init:      return "init";
+    default:          return "?";
+  }
 }
 
 static const char* reset_cause_label() {
@@ -32,9 +75,19 @@ static void capture_reset_cause() {
   reset_rstsr1 = R_SYSTEM->RSTSR1;
   reset_rstsr2 = R_SYSTEM->RSTSR2;
 
-  char line[48];
-  snprintf(line, sizeof(line), "RESET cause: %s  [%02X %04X %02X]",
+  // Boot breadcrumb: the phase reached before this reset is valid only if the
+  // magic survived in .noinit (a warm reset). Then re-arm it for this boot.
+  bool warm = (boot_magic == BOOT_MAGIC);
+  prev_boot_phase  = warm ? boot_phase  : 0;
+  prev_boot_gstate = warm ? boot_gstate : 0xFF;
+  prev_boot_bstep  = warm ? boot_bstep  : 0xFF;
+  boot_magic = BOOT_MAGIC;
+  boot_phase = BP_HW_INIT;
+
+  char line[96];
+  snprintf(line, sizeof(line), "RESET cause: %s  where: %s (%s)  [%02X %04X %02X]",
            reset_was_power_on() ? "power-on" : reset_cause_label(),
+           boot_phase_label(), boot_run_label(),
            reset_rstsr0, reset_rstsr1, reset_rstsr2);
   Serial.println(line);
 
@@ -58,6 +111,12 @@ static void oled_reset_cause_splash() {
   oled_display.println("");
   oled_display.print("cause: ");
   oled_display.println(reset_cause_label());
+  oled_display.print("where: ");
+  oled_display.println(boot_phase_label());
+  if (prev_boot_phase == BP_RUNNING) {
+    oled_display.print("in: ");
+    oled_display.println(boot_run_label());
+  }
 
   char raw[22];
   snprintf(raw, sizeof(raw), "%02X %04X %02X", reset_rstsr0, reset_rstsr1, reset_rstsr2);
@@ -101,9 +160,11 @@ void setup() {
   // that block inside WiFiSSLClient longer than the IWDT max (~5.5 s on RA4M1,
   // and the IWDT can't be reinitialised once started). So we start the WDT
   // only AFTER the update check has had its chance.
+  boot_phase = BP_UPDATE;
   setup_net();
 
   WDT.begin(5000); // 5-second timeout for normal operation
+  boot_phase = BP_WDT_ARMED;
 
   Serial.println("INIT done.");
 
