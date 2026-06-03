@@ -61,7 +61,10 @@ if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1;
 fi
 
 # Allow uncommitted changes only in config.h (which we're about to bump anyway).
-DIRTY="$(git status --porcelain | grep -vE ' (firmware_v2/)?config\.h$' || true)"
+# Scope to this directory (we're already cd'd into it): unrelated changes
+# elsewhere in the repo (docs, drawings, the cam project) shouldn't block a
+# firmware release.
+DIRTY="$(git status --porcelain -- . | grep -vE ' (firmware_v2/)?config\.h$' || true)"
 if [ -n "$DIRTY" ]; then
   echo "working tree has uncommitted changes outside config.h:" >&2
   echo "$DIRTY" >&2
