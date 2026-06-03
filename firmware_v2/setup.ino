@@ -81,6 +81,7 @@ static void capture_reset_cause() {
   prev_boot_phase  = warm ? boot_phase  : 0;
   prev_boot_gstate = warm ? boot_gstate : 0xFF;
   prev_boot_bstep  = warm ? boot_bstep  : 0xFF;
+  if (!warm) ota_attempts = 0;  // cold boot: .noinit holds garbage, start fresh
   boot_magic = BOOT_MAGIC;
   boot_phase = BP_HW_INIT;
 
@@ -156,15 +157,36 @@ void setup() {
     delay(4000);  // hold long enough to read; WDT isn't running yet
   }
 
-  // setup_net() runs the boot-time update check, which performs TLS handshakes
-  // that block inside WiFiSSLClient longer than the IWDT max (~5.5 s on RA4M1,
-  // and the IWDT can't be reinitialised once started). So we start the WDT
-  // only AFTER the update check has had its chance.
-  boot_phase = BP_UPDATE;
+  // WiFi association only (no TLS); wifi_try() bounds itself with a per-network
+  // timeout, so it's safe to run before the watchdog is armed.
   setup_net();
 
-  WDT.begin(5000); // 5-second timeout for normal operation
+  // Arm the watchdog BEFORE the update check. A TLS handshake that wedges the
+  // WiFiS3 modem used to hang forever here (the check ran with no watchdog);
+  // now it reboots within the WDT window instead. The check's read/download
+  // loops refresh the WDT, so only a stuck connect() can trip it.
+  WDT.begin(5000); // 5-second timeout
   boot_phase = BP_WDT_ARMED;
+
+  // Boot-time update check, guarded so a persistently wedged modem can't keep
+  // the machine out of idle: after OTA_MAX_BOOT_ATTEMPTS consecutive boots that
+  // entered the check without completing it (each ended in a WDT reboot), skip.
+  if (ota_attempts >= OTA_MAX_BOOT_ATTEMPTS) {
+    Serial.println("OTA: skipping update check (too many incomplete attempts)");
+    oled_display.clearDisplay();
+    oled_display.setTextColor(SSD1306_WHITE);
+    oled_display.setTextSize(1);
+    oled_display.setCursor(0, 0);
+    oled_display.println("Update skipped");
+    oled_display.display();
+    delay(1200);
+  } else {
+    ota_attempts++;          // persisted; a WDT reboot mid-check leaves this bumped
+    boot_phase = BP_UPDATE;
+    check_for_update(/*verbose=*/true);
+    ota_attempts = 0;        // returned without a reboot → the check completed
+    boot_phase = BP_WDT_ARMED;
+  }
 
   Serial.println("INIT done.");
 

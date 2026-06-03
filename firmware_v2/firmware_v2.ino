@@ -178,6 +178,14 @@ __attribute__((section(".noinit"))) volatile uint8_t boot_phase;
 __attribute__((section(".noinit"))) volatile uint8_t boot_gstate;  // global_state
 __attribute__((section(".noinit"))) volatile uint8_t boot_bstep;   // brew_step
 
+// OTA boot-attempt counter (also .noinit). The boot-time update check runs under
+// the watchdog: a wedged TLS connect reboots within the WDT window instead of
+// freezing. This counts consecutive boots that entered the check without
+// completing it; once it hits the limit we SKIP the check so the machine still
+// reaches idle. Reset to 0 on a cold boot and whenever the check completes.
+#define OTA_MAX_BOOT_ATTEMPTS 3
+__attribute__((section(".noinit"))) uint8_t ota_attempts;
+
 //--- helper programs
 
 unsigned long program_start = -1;

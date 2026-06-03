@@ -142,7 +142,8 @@ void setup_net() {
     oled_display.println(WiFi.localIP());
     oled_display.display();
     delay(2000);
-    check_for_update(/*verbose=*/true);
+    // The boot-time update check is invoked by setup() AFTER the watchdog is
+    // armed (so a wedged TLS connect reboots instead of hanging), not here.
   } else {
     oled_display.println("WiFi failed");
     oled_display.display();

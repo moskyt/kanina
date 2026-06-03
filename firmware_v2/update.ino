@@ -18,13 +18,16 @@
 
 static constexpr int   UPDATE_MAX_REDIRECTS = 4;
 static constexpr int   UPDATE_CONNECT_RETRIES = 3;
-// Per-attempt TLS connect deadline, enforced by the ESP32 co-processor. MUST
-// stay below the WiFiS3 modem's 10 s buf_read window: otherwise a stalled
+// Per-attempt TLS connect deadline, enforced by the ESP32 co-processor. Two
+// constraints: (1) below the WiFiS3 modem's 10 s buf_read window, or a stalled
 // handshake makes the host give up while the co-processor is still working,
 // desyncing the AT protocol and wedging every later modem call (the original
-// "stuck on found vX forever" hang). Without this the connect uses the
-// no-timeout +SSLCLIENTCONNECTNAME command and can never self-heal.
-static constexpr int   UPDATE_CONNECT_TIMEOUT_MS = 8000;
+// "stuck on found vX forever" hang); (2) below the 5 s watchdog now armed for
+// the boot check, so a normal-slow handshake aborts cleanly and retries instead
+// of being WDT-rebooted. A genuinely wedged modem still trips the WDT (that's
+// the intended backstop). Without a timeout the connect uses the no-timeout
+// +SSLCLIENTCONNECTNAME command and can never self-heal.
+static constexpr int   UPDATE_CONNECT_TIMEOUT_MS = 4000;
 static constexpr unsigned long UPDATE_HTTP_TIMEOUT_MS = 20000;
 static constexpr unsigned long UPDATE_OLED_PROGRESS_MS = 500;
 // Absolute ceiling for a single header line: read_line's inactivity timeout is
@@ -327,6 +330,7 @@ static bool download_and_apply(const String& tag) {
     snprintf(msg, sizeof(msg), "%ldk > %ldk", head.content_length / 1024, ota_max / 1024);
     oled_status("Too big for OTA", msg);
     ssl.stop();
+    WDT.refresh();
     delay(4000);
     return false;
   }
@@ -392,10 +396,11 @@ static bool download_and_apply(const String& tag) {
   return true;
 }
 
-// Entry point. `verbose=true` logs the no-update path; called from setup_net()
-// before the WDT is enabled (TLS handshakes block longer than the IWDT max).
-// Also exposed to the CLI; note that the CLI path runs with WDT already
-// running at 5 s — long blocks inside WiFiSSLClient will reset the board.
+// Entry point. `verbose=true` logs the no-update path. Always runs with the
+// watchdog armed (5 s): the read/download loops refresh it, and a stuck TLS
+// connect() trips it on purpose. At boot it's invoked from setup() behind the
+// ota_attempts guard so repeated wedges can't keep the machine out of idle;
+// it's also exposed to the CLI.
 void check_for_update(bool verbose) {
   if (!wifi_ready) {
     if (verbose) { Log.println("UPDATE: WiFi not ready, skip"); }
@@ -410,12 +415,14 @@ void check_for_update(bool verbose) {
   if (!latest_tag(tag)) {
     Log.println("UPDATE: could not resolve latest tag");
     oled_status("Update", "no tag");
+    WDT.refresh();
     delay(1500);
   } else if (tag == FIRMWARE_VERSION) {
     if (verbose) {
       Log.print("UPDATE: already on latest ("); Log.print(tag); Log.println(")");
     }
     oled_status("Up to date", FIRMWARE_VERSION);
+    WDT.refresh();
     delay(1500);
   } else {
     Log.print("UPDATE: new version available "); Log.print(tag);
@@ -423,10 +430,12 @@ void check_for_update(bool verbose) {
     char msg[24];
     snprintf(msg, sizeof(msg), "found %s", tag.c_str());
     oled_status("Update", msg);
+    WDT.refresh();
     delay(800); // let the user see which version we're fetching
     download_and_apply(tag); // on success this never returns (apply() resets)
     // if we get here the download failed; download_and_apply() has already
     // painted the specific reason — hold it long enough to read.
+    WDT.refresh();
     delay(4000);
   }
 
