@@ -67,22 +67,23 @@ void print_brew_flow_serial() {
 
 void update_displays() {
   //--- show gauges
+  int t = (int)measurement_temperature;
   int n_temp;
   int t_min = 80;
   int t_b = brew_temperature;
   int t_a = t_b - 5;
   int t_c = t_b + 5;
   int t_max = 105;
-  if (measurement_temperature < t_min)
+  if (t < t_min)
     n_temp = 0;
-  else if (measurement_temperature < t_a)
-    n_temp = map((int)measurement_temperature, t_min, t_a, 0, 64);
-  else if (measurement_temperature < t_b)
-    n_temp = map((int)measurement_temperature, t_a, t_b, 64, 128);
-  else if (measurement_temperature < t_c)
-    n_temp = map((int)measurement_temperature, t_b, t_c, 128, 196);
-  else if (measurement_temperature < t_max)
-    n_temp = map((int)measurement_temperature, t_c, t_max, 196, 255);
+  else if (t < t_a)
+    n_temp = map(t, t_min,   t_a,   0,  64);
+  else if (t < t_b)
+    n_temp = map(t,   t_a,   t_b,  64, 128);
+  else if (t < t_c)
+    n_temp = map(t,   t_b,   t_c, 128, 196);
+  else if (t < t_max)
+    n_temp = map(t,   t_c, t_max, 196, 255);
   else
     n_temp = 255;
   analogWrite(PIN_METER_TEMP, n_temp);
