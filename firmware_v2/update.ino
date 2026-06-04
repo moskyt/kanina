@@ -22,11 +22,12 @@ static constexpr int   UPDATE_CONNECT_RETRIES = 3;
 // constraints: (1) below the WiFiS3 modem's 10 s buf_read window, or a stalled
 // handshake makes the host give up while the co-processor is still working,
 // desyncing the AT protocol and wedging every later modem call (the original
-// "stuck on found vX forever" hang); (2) below the 5 s watchdog now armed for
-// the boot check, so a normal-slow handshake aborts cleanly and retries instead
-// of being WDT-rebooted. A genuinely wedged modem still trips the WDT (that's
-// the intended backstop). Without a timeout the connect uses the no-timeout
-// +SSLCLIENTCONNECTNAME command and can never self-heal.
+// "stuck on found vX forever" hang); (2) below the 5 s watchdog, because the
+// update check now runs at runtime (main + up) with the WDT armed and the
+// blocking connect() can't be refreshed — so a normal connect must finish under
+// 5 s. A genuinely wedged modem can still trip the WDT, which just reboots to
+// idle. Without a timeout the connect uses the no-timeout +SSLCLIENTCONNECTNAME
+// command and can never self-heal.
 static constexpr int   UPDATE_CONNECT_TIMEOUT_MS = 4000;
 static constexpr unsigned long UPDATE_HTTP_TIMEOUT_MS = 20000;
 static constexpr unsigned long UPDATE_OLED_PROGRESS_MS = 500;
@@ -396,11 +397,11 @@ static bool download_and_apply(const String& tag) {
   return true;
 }
 
-// Entry point. `verbose=true` logs the no-update path. Always runs with the
-// watchdog armed (5 s): the read/download loops refresh it, and a stuck TLS
-// connect() trips it on purpose. At boot it's invoked from setup() behind the
-// ota_attempts guard so repeated wedges can't keep the machine out of idle;
-// it's also exposed to the CLI.
+// Entry point. `verbose=true` logs the no-update path. Triggered at runtime by
+// main + up (handle_combo_main_up) or the CLI, always with the 5 s watchdog
+// armed: the read/download loops refresh it, and UPDATE_CONNECT_TIMEOUT_MS keeps
+// the blocking connect() under the window. A hard modem wedge can still trip the
+// WDT, which reboots to idle (boot does not auto-update, so there's no loop).
 void check_for_update(bool verbose) {
   if (!wifi_ready) {
     if (verbose) { Log.println("UPDATE: WiFi not ready, skip"); }

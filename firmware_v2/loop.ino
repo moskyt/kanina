@@ -336,21 +336,8 @@ void loop_pid(unsigned long now) {
 void loop() {
   unsigned long now = millis();
 
-  // Breadcrumb: mark the first post-update modem call, then "running" once we
-  // survive it. If loop_net() wedges on a modem desynced by the update's TLS and
-  // the freshly-armed WDT fires, the splash shows where: 1st net.
-  static bool booted = false;
-  if (!booted) boot_phase = BP_FIRST_NET;
-
-  // Live breadcrumb: which state/brew step is executing this loop, so a reset
-  // during the brew sequence pinpoints the phase on the next boot's splash.
-  boot_gstate = global_state;
-  boot_bstep  = brew_step;
-
   //--- WiFi / telnet
   loop_net();
-
-  if (!booted) { boot_phase = BP_RUNNING; booted = true; }
 
   if (update_counter <= 0 || update_flag) {
     update_displays();

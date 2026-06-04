@@ -154,38 +154,6 @@ int update_counter = 0;
 int update_ref = 100;
 bool update_flag = false;
 
-//--- boot breadcrumb
-//
-// SRAM survives a warm reset (watchdog/software/pin) and is only scrambled by a
-// true power-on, so a variable in .noinit (not cleared by startup) can carry the
-// last boot phase reached across a reset. capture_reset_cause() reads it on the
-// next boot and the splash prints it, so a headless machine shows *where* it died
-// (update check vs. just after the WDT arms in the first loop_net) not just why.
-// A magic guards against the power-on case where .noinit holds garbage.
-#define BOOT_MAGIC 0xC0FFEE42u
-enum boot_phase_t : uint8_t {
-  BP_HW_INIT = 1,   // hardware init (pins/scale/displays)
-  BP_UPDATE,        // inside setup_net(): GitHub update check, WDT not armed yet
-  BP_WDT_ARMED,     // WDT.begin() done, finishing setup
-  BP_FIRST_NET,     // first post-update modem call (first loop_net)
-  BP_RUNNING        // survived the first full loop iteration
-};
-__attribute__((section(".noinit"))) uint32_t boot_magic;
-__attribute__((section(".noinit"))) volatile uint8_t boot_phase;
-// Live location once running (BP_RUNNING): updated every loop so a reset during
-// normal operation — notably the brew sequence — shows which state/brew step was
-// executing, not just "running".
-__attribute__((section(".noinit"))) volatile uint8_t boot_gstate;  // global_state
-__attribute__((section(".noinit"))) volatile uint8_t boot_bstep;   // brew_step
-
-// OTA boot-attempt counter (also .noinit). The boot-time update check runs under
-// the watchdog: a wedged TLS connect reboots within the WDT window instead of
-// freezing. This counts consecutive boots that entered the check without
-// completing it; once it hits the limit we SKIP the check so the machine still
-// reaches idle. Reset to 0 on a cold boot and whenever the check completes.
-#define OTA_MAX_BOOT_ATTEMPTS 3
-__attribute__((section(".noinit"))) uint8_t ota_attempts;
-
 //--- helper programs
 
 unsigned long program_start = -1;

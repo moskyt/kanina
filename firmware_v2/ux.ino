@@ -23,46 +23,49 @@ void print_pid_serial() {
   Serial.println("");
 }
 
+// Shared scratch buffer for the brew serial-print helpers below. They run only
+// from the main loop, one at a time (never nested, never from an ISR), so a
+// single static buffer is safe and keeps these ~110-char strings off the tiny
+// 1024 B main stack — a local char[] here once overflowed it and reset the board.
+static char brew_print_buf[160];
+
 void print_brew_heatup_serial() {
-  char buffer[1024];
   int ti = (int)(10 * Input);
   int tt = (int)(10 * pid_target);
   int ts = (int)(10 * Setpoint);
   int ta = (int)(10 * AdjustedSetpoint);
   int ou = (int)(10 * Output);
-  snprintf(buffer, sizeof(buffer), "PID1 I %3d.%1d T %3d.%1d S %3d.%1d S* %3d.%1d O %4d.%1d H %3d        U %7ld %7ld    EQ %3d", 
-    ti/10, ti%10, tt/10, tt%10, ts/10, ts%10, ta/10, ta%10, 
-    ou/10, ou%10, signal_heater,          
-    (long int)accumulated_heat, 
+  snprintf(brew_print_buf, sizeof(brew_print_buf), "PID1 I %3d.%1d T %3d.%1d S %3d.%1d S* %3d.%1d O %4d.%1d H %3d        U %7ld %7ld    EQ %3d",
+    ti/10, ti%10, tt/10, tt%10, ts/10, ts%10, ta/10, ta%10,
+    ou/10, ou%10, signal_heater,
+    (long int)accumulated_heat,
     (long int)adjusted_accumulated_heat, brew_steady_counter);
-  Serial.println(buffer);
+  Serial.println(brew_print_buf);
 }
 
 void print_brew_preheat_serial() {
-  char buffer[1024];
   int ti = (int)(10 * Input);
   int tt = (int)(10 * pid_target);
   int ts = (int)(10 * Setpoint);
   int ta = (int)(10 * AdjustedSetpoint);
   int ou = (int)(10 * Output);
-  snprintf(buffer, sizeof(buffer), "**** I %3d.%1d T %3d.%1d S %3d.%1d S* %3d.%1d O %4d.%1d H %3d", 
-    ti/10, ti%10, tt/10, tt%10, ts/10, ts%10, ta/10, ta%10, 
+  snprintf(brew_print_buf, sizeof(brew_print_buf), "**** I %3d.%1d T %3d.%1d S %3d.%1d S* %3d.%1d O %4d.%1d H %3d",
+    ti/10, ti%10, tt/10, tt%10, ts/10, ts%10, ta/10, ta%10,
     ou/10, ou%10, signal_heater);
-  Serial.println(buffer);
+  Serial.println(brew_print_buf);
 }
 
 void print_brew_flow_serial() {
-  char buffer[1024];
   int ti = (int)(10 * Input);
   int tt = (int)(10 * pid_target);
   int ts = (int)(10 * Setpoint);
   int ta = (int)(10 * AdjustedSetpoint);
   int ou = (int)(10 * Output);
-  snprintf(buffer, sizeof(buffer), "PID2 I %3d.%1d T %3d.%1d S %3d.%1d S* %3d.%1d O %+3d.%1d H %3d        U %7ld    W  %3d  /p %3d", 
-    ti/10, ti%10, tt/10, tt%10, ts/10, ts%10, ta/10, ta%10, 
-    ou/10, abs(ou)%10, signal_heater,          
+  snprintf(brew_print_buf, sizeof(brew_print_buf), "PID2 I %3d.%1d T %3d.%1d S %3d.%1d S* %3d.%1d O %+3d.%1d H %3d        U %7ld    W  %3d  /p %3d",
+    ti/10, ti%10, tt/10, tt%10, ts/10, ts%10, ta/10, ta%10,
+    ou/10, abs(ou)%10, signal_heater,
     (long int)accumulated_heat, (int)measurement_weight, signal_pump);
-  Serial.println(buffer);
+  Serial.println(brew_print_buf);
 }
 
 void update_displays() {
@@ -165,8 +168,48 @@ void show_led_number(int number) {
 
 // --- BUTTON HANDLERS
 
+// New input endpoints (fill in the TODO actions):
+//  - main + up / main + down : chords, detected via button.isPressed() in the
+//    up/down handlers. A chord sets main_modifier_used so the eventual main
+//    release doesn't ALSO fire the normal click action (start brew / bootstrap).
+//  - double / triple click on main : registered in setup_buttons(). NOTE: adding
+//    these delays a single click (start brew) by the ~300 ms double-click window.
+static bool main_modifier_used = false;
+
+void handle_combo_main_up() {
+  Serial.println("combo: main + up -> firmware update check");
+  if (global_state != s_idle) return;  // only from idle, never mid-brew
+  // The RA4M1 watchdog can't be stopped once started, so this runs UNDER the 5 s
+  // WDT. check_for_update() refreshes it in its read/download loops, and the TLS
+  // connect is bounded by UPDATE_CONNECT_TIMEOUT_MS (< 5 s) so a normal connect
+  // won't trip it; only a hard modem wedge would, which just reboots to idle.
+  check_for_update(/*verbose=*/true);
+}
+
+void handle_combo_main_down() {
+  Serial.println("combo: main + down -> reboot");
+  mx__shutdown();      // heater/pump/spray off before we reset
+  NVIC_SystemReset();  // software reset; does not return
+}
+
+void handle_main_double(Button2& btn) {
+  Serial.println("main: double click");
+  // TODO: action for double click
+}
+
+void handle_main_triple(Button2& btn) {
+  Serial.println("main: triple click");
+  // TODO: action for triple click
+}
+
 void handle_set_up(Button2& btn) {
   Serial.println("up");
+
+  if (button.isPressed()) {  // main held -> "main + up" chord
+    main_modifier_used = true;
+    handle_combo_main_up();
+    return;
+  }
 
   if (global_state == s_idle || global_state == s_bootstrap) {
     if (brew_target_weight < 500) brew_target_weight += 10;
@@ -177,6 +220,12 @@ void handle_set_up(Button2& btn) {
 void handle_set_down(Button2& btn) {
   Serial.println("down");
 
+  if (button.isPressed()) {  // main held -> "main + down" chord
+    main_modifier_used = true;
+    handle_combo_main_down();
+    return;
+  }
+
   if (global_state == s_idle || global_state == s_bootstrap) {
     if (brew_target_weight > 100) brew_target_weight -= 10;
     show_led_number(brew_target_weight);
@@ -184,6 +233,7 @@ void handle_set_down(Button2& btn) {
 }
 
 void handle_main_long(Button2& btn) {
+  if (main_modifier_used) { main_modifier_used = false; return; }  // was a chord modifier
   Serial.println("Pressed button for long.");
   if (global_state == s_idle) {
     // start bootstrap!
@@ -211,6 +261,7 @@ void handle_main_long(Button2& btn) {
 }
 
 void handle_main(Button2& btn) {
+  if (main_modifier_used) { main_modifier_used = false; return; }  // was a chord modifier
   Serial.println("Pressed button.");
 
   if ((global_state == s_idle) || (global_state == s_bootstrap)) {
