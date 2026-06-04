@@ -33,6 +33,8 @@ static void telnet_accept() {
 
 // Called by LogStream to mirror serial output to the active telnet client.
 void telnet_write(const uint8_t* p, size_t n) {
+  if (!config__wifi_enabled) return;
+  if (global_state == s_brew) return;  // no modem writes mid-brew (see loop_net)
   if (telnet_client && telnet_client.connected()) {
     telnet_client.write(p, n);
   }
@@ -126,6 +128,20 @@ static void wifi_connect() {
 }
 
 void setup_net() {
+  if (!config__wifi_enabled) {
+    Serial.println("WiFi disabled (config__wifi_enabled=false)");
+    wifi_ready = false;
+    led_display.print("CAFE");
+    oled_display.clearDisplay();
+    oled_display.setTextSize(1);
+    oled_display.setTextColor(SSD1306_WHITE);
+    oled_display.setCursor(0, 0);
+    oled_display.println("WiFi OFF");
+    oled_display.display();
+    delay(1000);
+    return;
+  }
+
   wifi_connect();
 
   // Keep WiFi status off the 4-char LED; just clear the connect spinner.
@@ -152,6 +168,14 @@ void setup_net() {
 }
 
 void loop_net() {
+  if (!config__wifi_enabled) return;  // diagnostic build: never touch the modem
+
+  // Don't touch the ESP32-S3 modem during a brew. The pump/spray/heater switching
+  // can wedge the modem link, and a blocked WiFi.status()/telnet call would then
+  // overrun the 5 s watchdog mid-brew. WiFi stays associated; we just stop polling
+  // it until the brew is done. (telnet_write() is guarded the same way.)
+  if (global_state == s_brew) return;
+
   static unsigned long last_check = 0;
   unsigned long now = millis();
 

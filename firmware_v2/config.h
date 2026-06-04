@@ -47,6 +47,13 @@ constexpr unsigned config__wifi_network_count =
 // Per-network association timeout.
 constexpr unsigned long config__wifi_connect_timeout_ms = 15000;
 
+// Master WiFi switch. Set false to build a diagnostic firmware that never
+// connects and never touches the ESP32-S3 modem (setup_net and loop_net become
+// no-ops, so no WiFi.status()/telnet/OTA). Use it to test whether the mid-brew
+// watchdog reset is the modem wedging under actuator noise: if brews stop
+// resetting with this false, the WiFi path is the culprit.
+constexpr bool config__wifi_enabled = true;
+
 // Bump this string before every release; the GitHub release tag must match
 // exactly (e.g. tag "v0.1.0" -> FIRMWARE_VERSION "v0.1.0").
 constexpr const char* FIRMWARE_VERSION = "v0.1.23";

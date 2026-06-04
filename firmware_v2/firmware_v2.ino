@@ -227,7 +227,8 @@ int brew_target_weight = 320;
 // BREW program
 enum brew_step_ { b_idle, b_heatup1, b_preheat1, b_flow1, b_heatup2, b_preheat2, b_flow2, b_done } brew_step;
 
-long brew_temperature;
+long brew_temperature = config__brew_temperature;  // sane default so the temp gauge
+                                                    // works before the first brew sets it
 long brew_base_power;
 long brew_preheat_time;
 unsigned long brew_preheat_timer;
