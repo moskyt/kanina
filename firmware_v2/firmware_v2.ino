@@ -218,6 +218,7 @@ int pid_target = -1;
 // BOOTSTRAP runs in phases (cf. brew_step): bs_full_power = heater flat-out ramp,
 // bs_pid = PID final approach. Set on bootstrap start, advanced in loop_bootstrap().
 enum bootstrap_step_ { bs_full_power, bs_pid } bootstrap_step;
+unsigned long bootstrap_start_ms = 0;  // when bootstrap began (phase-1 soft-start ramp)
 //- printer
 unsigned long pid_print_counter = -1;
 unsigned long pid_print_period = 200;

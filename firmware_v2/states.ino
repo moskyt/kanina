@@ -9,6 +9,7 @@ void perform__idle() {
 
 void perform__bootstrap() {
   global_state = s_bootstrap;
+  bootstrap_start_ms = millis();  // phase-1 soft-start ramp reference
   buzzer_start_bootstrap();
   neo_bootstrap();
 }

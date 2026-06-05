@@ -334,14 +334,17 @@ void loop_pid(unsigned long now) {
 }
 
 // Bootstrap (quick heat-up) in two phases:
-//   1) heater flat-out at config__bootstrap_full_power until
-//      config__bootstrap_temperature_full, for a fast ramp;
-//   2) hand over to the PID for a clean final approach (avoids a big overshoot).
+//   1) open-loop ramp: power eased in over config__bootstrap_ramp_time s (soft
+//      start, so the laggy sensor can catch up), then proportional to the gap to
+//      config__bootstrap_temperature_full so it tapers to ~0 at the handoff —
+//      flat-out blasting overshot badly given the element's thermal inertia, and
+//      the stored heat coasts us up from the handoff anyway;
+//   2) hand over to the PID for the final approach to config__bootstrap_temperature.
 void loop_bootstrap(unsigned long now) {
   Input = measurement_temperature;
 
   // Switch to PID once we reach config__bootstrap_temperature_full (checked first,
-  // so an already-warm machine never gets a full-power blast).
+  // so an already-warm machine never gets a power blast).
   if (bootstrap_step == bs_full_power && measurement_temperature >= config__bootstrap_temperature_full) {
     bootstrap_step = bs_pid;
     Setpoint = measurement_temperature + 1;
@@ -354,7 +357,15 @@ void loop_bootstrap(unsigned long now) {
   }
 
   if (bootstrap_step == bs_full_power) {
-    signal_heater = config__bootstrap_full_power;
+    // Power tapers to ~0 at the handoff temperature (cap when cold; ~20 C room-temp
+    // reference for the cold end), then eased in over the first ramp_time seconds.
+    int gap = config__bootstrap_temperature_full - (int)measurement_temperature;
+    int taper = config__bootstrap_full_power * gap / (config__bootstrap_temperature_full - 20);
+    float ramp = (config__bootstrap_ramp_time > 0)
+                   ? (now - bootstrap_start_ms) / (config__bootstrap_ramp_time * 1000.0)
+                   : 1.0;
+    ramp = constrain(ramp, 0.0, 1.0);
+    signal_heater = constrain((int)(taper * ramp), 0, config__bootstrap_full_power);
     if (update_counter == 0) print_pid_serial();
   } else {
     loop_pid(now);
