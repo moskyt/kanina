@@ -17,7 +17,9 @@ constexpr float transfer = 20.0;
 constexpr float decay2 = 115.0;
 constexpr float capacity2 = 0.006;
 
-constexpr int   config__bootstrap_temperature = 90;
+constexpr int   config__bootstrap_temperature = 90;       // bootstrap PID hold target
+constexpr int   config__bootstrap_temperature_full = 70;  // phase 1 runs flat-out up to here
+constexpr int   config__bootstrap_full_power = 200;       // heater power for the flat-out phase
 constexpr int   config__brew_temperature = 95;
 constexpr int   config__brew_base_power = 120;
 constexpr int   config__brew_preheat_time = 150;

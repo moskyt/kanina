@@ -183,6 +183,7 @@ void handle_combo_main_up() {
   // WDT. check_for_update() refreshes it in its read/download loops, and the TLS
   // connect is bounded by UPDATE_CONNECT_TIMEOUT_MS (< 5 s) so a normal connect
   // won't trip it; only a hard modem wedge would, which just reboots to idle.
+  buzzer_update();
   check_for_update(/*verbose=*/true);
 }
 
@@ -236,24 +237,21 @@ void handle_main_long(Button2& btn) {
   if (main_modifier_used) { main_modifier_used = false; return; }  // was a chord modifier
   Serial.println("Pressed button for long.");
   if (global_state == s_idle) {
-    // start bootstrap!
+    // start bootstrap! phase 1 = heater flat-out to config__bootstrap_temperature_full,
+    // then PID (loop_bootstrap does the hand-over and re-seeds the PID there).
     pid_target = config__bootstrap_temperature;
     Serial.print("Bootstrap requested: ");
     Serial.println(config__bootstrap_temperature);
 
-    Input = measurement_temperature;
-    Setpoint = measurement_temperature + 1;
-    if (Setpoint > pid_target) Setpoint = pid_target;
-    pid_creep_timer = 0;
-    pid_print_counter = 0; 
+    bootstrap_step = bs_full_power;
     accumulated_heat = 0.0;
 
     heaterPID.SetTunings(K1p, K1i, K1d);
     heaterPID.SetMode(heaterPID.Control::automatic);
     heaterPID.SetOutputLimits(0, 255);
-    heaterPID.Reset();    
+    heaterPID.Reset();
     perform__bootstrap();
-  } else 
+  } else
   if (global_state == s_bootstrap) {
     perform__idle();
   }

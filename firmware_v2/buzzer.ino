@@ -27,6 +27,11 @@ void buzzer_helo() {
   play_melody(melody, 100, 20);
 }
 
+void buzzer_update() {
+  static const uint16_t melody[] = { NOTE_A4, NOTE_E5, NOTE_A4 };
+  play_melody(melody, 100, 20);
+}
+
 void buzzer_init() {
   static const uint16_t melody[] = { NOTE_A4, NOTE_CS5, NOTE_E5, NOTE_CS5, NOTE_E5 };
   play_melody(melody, 100, 20);

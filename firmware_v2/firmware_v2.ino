@@ -215,6 +215,9 @@ QuickPID heaterPID(&Input, &Output, &AdjustedSetpoint);
 unsigned long pid_creep_timer = -1;
 unsigned long pid_creep_period = 1000;
 int pid_target = -1;
+// BOOTSTRAP runs in phases (cf. brew_step): bs_full_power = heater flat-out ramp,
+// bs_pid = PID final approach. Set on bootstrap start, advanced in loop_bootstrap().
+enum bootstrap_step_ { bs_full_power, bs_pid } bootstrap_step;
 //- printer
 unsigned long pid_print_counter = -1;
 unsigned long pid_print_period = 200;

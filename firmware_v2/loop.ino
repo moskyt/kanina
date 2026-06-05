@@ -333,6 +333,34 @@ void loop_pid(unsigned long now) {
   if (update_counter == 0) print_pid_serial();
 }
 
+// Bootstrap (quick heat-up) in two phases:
+//   1) heater flat-out at config__bootstrap_full_power until
+//      config__bootstrap_temperature_full, for a fast ramp;
+//   2) hand over to the PID for a clean final approach (avoids a big overshoot).
+void loop_bootstrap(unsigned long now) {
+  Input = measurement_temperature;
+
+  // Switch to PID once we reach config__bootstrap_temperature_full (checked first,
+  // so an already-warm machine never gets a full-power blast).
+  if (bootstrap_step == bs_full_power && measurement_temperature >= config__bootstrap_temperature_full) {
+    bootstrap_step = bs_pid;
+    Setpoint = measurement_temperature + 1;
+    if (Setpoint > pid_target) Setpoint = pid_target;
+    pid_creep_timer = now;
+    accumulated_heat = 0.0;
+    last_pid_t = 0;          // make loop_pid re-seed its dt
+    heaterPID.Reset();
+    Serial.println("BOOTSTRAP: reached full-power cutoff, handing over to PID");
+  }
+
+  if (bootstrap_step == bs_full_power) {
+    signal_heater = config__bootstrap_full_power;
+    if (update_counter == 0) print_pid_serial();
+  } else {
+    loop_pid(now);
+  }
+}
+
 void loop() {
   unsigned long now = millis();
 
@@ -372,7 +400,7 @@ void loop() {
   //--- work logic
   now = millis();
   if (global_state == s_pid) loop_pid(now);
-  if (global_state == s_bootstrap) loop_pid(now);
+  if (global_state == s_bootstrap) loop_bootstrap(now);
   if (global_state == s_flow) loop_flow(now);  
   if (global_state == s_cool) loop_cool(now);  
   if (global_state == s_brew) loop_brew(now);  
