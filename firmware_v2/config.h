@@ -58,7 +58,7 @@ constexpr bool config__wifi_enabled = true;
 
 // Bump this string before every release; the GitHub release tag must match
 // exactly (e.g. tag "v0.1.0" -> FIRMWARE_VERSION "v0.1.0").
-constexpr const char* FIRMWARE_VERSION = "v0.1.25";
+constexpr const char* FIRMWARE_VERSION = "v0.1.26";
 
 constexpr const char* config__github_owner = "moskyt";
 constexpr const char* config__github_repo  = "kanina";
